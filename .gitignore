@@ -1,0 +1,15 @@
+# Локальные бэкапы и отчёты с персональными данными — не коммитить
+tasker-backup-*.json
+session-*.txt
+session-*.csv
+work-report-*.txt
+team-report-*.txt
+daily-report-*.txt
+daily-report-*.csv
+*.bak
+*.tmp
+
+# Системные
+.DS_Store
+Thumbs.db
+node_modules/

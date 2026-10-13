@@ -1,0 +1,3140 @@
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Задачник</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #1e1e2e; color: #e4e4e7;
+    min-height: 100vh; padding: 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+
+  .header { text-align: center; margin-bottom: 16px; }
+  .header h1 { font-size: 26px; font-weight: 600; margin-bottom: 14px; color: #e4e4e7; }
+  .header-actions {
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  }
+  .header-actions button {
+    background: #3f3f56; color: #e4e4e7; border: none;
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .header-actions button:hover { background: #52527a; }
+  .header-actions button.accent { background: #6366f1; color: white; }
+  .header-actions button.accent:hover { background: #4f46e5; }
+  .header-actions button.warn { background: #ef4444; color: white; }
+  .header-actions button.warn:hover { background: #dc2626; }
+  .header-actions button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .backup-banner {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: #1e1e2e; padding: 12px 16px; border-radius: 10px;
+    margin-bottom: 14px; display: none; align-items: center; gap: 12px;
+    flex-wrap: wrap; font-weight: 500;
+  }
+  .backup-banner.show { display: flex; }
+  .backup-banner .txt { flex: 1; font-size: 14px; }
+  .backup-banner button {
+    background: #1e1e2e; color: #fbbf24; border: none;
+    padding: 8px 14px; border-radius: 8px; font-size: 13px;
+    cursor: pointer; font-weight: 600;
+  }
+  .backup-banner button:hover { background: #0f0f1a; }
+  .backup-banner .close {
+    background: transparent; color: #1e1e2e; padding: 4px 8px; font-size: 16px;
+  }
+  .backup-banner .close:hover { background: rgba(0,0,0,0.15); }
+
+  .autosave-status {
+    position: fixed; bottom: 16px; right: 16px;
+    background: #2a2a3c; color: #a1a1aa; font-size: 12px;
+    padding: 8px 12px; border-radius: 20px; z-index: 500;
+    display: flex; align-items: center; gap: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .autosave-status .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+  }
+  .autosave-status.saving .dot { background: #f59e0b; animation: pulse 1s infinite; }
+  .autosave-status.error .dot { background: #ef4444; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 16px;
+    background: #2a2a3c; padding: 4px; border-radius: 10px;
+  }
+  .tabs button {
+    flex: 1; background: transparent; color: #a1a1aa; border: none;
+    padding: 10px; border-radius: 8px; font-size: 14px; cursor: pointer;
+    font-weight: 500; transition: all 0.15s;
+  }
+  .tabs button.active { background: #6366f1; color: white; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .add-box {
+    background: #2a2a3c; padding: 14px; border-radius: 12px;
+    margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .add-box input[type="text"] {
+    width: 100%; padding: 11px 12px; border-radius: 8px;
+    border: 1px solid #3f3f56; background: #1e1e2e; color: #e4e4e7; font-size: 15px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+
+  .field-group {
+    flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 6px;
+    background: #23233a; padding: 8px 10px; border-radius: 8px;
+  }
+  .field-group label { font-size: 12px; color: #a1a1aa; display: flex; align-items: center; gap: 6px; }
+  .field-group input[type="datetime-local"],
+  .field-group input[type="time"],
+  .field-group input[type="date"],
+  .field-group select,
+  .field-group input[type="text"],
+  .field-group textarea {
+    padding: 8px; border-radius: 6px; border: 1px solid #3f3f56;
+    background: #1e1e2e; color: #e4e4e7; font-size: 14px;
+    width: 100%; cursor: pointer; color-scheme: dark;
+    font-family: inherit;
+  }
+  .field-group input[type="text"], .field-group textarea { cursor: text; }
+  .field-group textarea { resize: vertical; min-height: 60px; }
+
+  .quick-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .quick-btns button {
+    background: #3f3f56; color: #d4d4d8; font-size: 11px;
+    padding: 4px 8px; border-radius: 6px; border: none; cursor: pointer;
+  }
+  .quick-btns button:hover { background: #52527a; }
+
+  button.primary {
+    padding: 11px 18px; border-radius: 8px; border: none;
+    background: #6366f1; color: white; font-size: 15px; cursor: pointer;
+    font-weight: 500; transition: background 0.15s;
+  }
+  button.primary:hover { background: #4f46e5; }
+  button.danger { background: #ef4444; padding: 6px 10px; font-size: 13px; border: none; border-radius: 6px; color: white; cursor: pointer; }
+  button.danger:hover { background: #dc2626; }
+  button.success { background: #22c55e; color: white; border: none; padding: 11px 18px; border-radius: 8px; font-size: 15px; cursor: pointer; font-weight: 500; }
+  button.success:hover { background: #16a34a; }
+  button.stop { background: #ef4444; color: white; border: none; padding: 11px 18px; border-radius: 8px; font-size: 15px; cursor: pointer; font-weight: 500; }
+  button.stop:hover { background: #dc2626; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .search-box { position: relative; margin-bottom: 12px; }
+  .search-box input {
+    width: 100%; padding: 10px 12px 10px 36px; border-radius: 10px;
+    border: 1px solid #3f3f56; background: #2a2a3c; color: #e4e4e7;
+    font-size: 14px; outline: none;
+  }
+  .search-box input:focus { border-color: #6366f1; }
+  .search-box::before {
+    content: "🔍"; position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); font-size: 14px; pointer-events: none;
+  }
+
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filters button {
+    background: #2a2a3c; color: #a1a1aa; font-size: 13px; padding: 7px 12px;
+    border: none; border-radius: 8px; cursor: pointer;
+  }
+  .filters button.active { background: #6366f1; color: white; }
+
+  .stats-toggle {
+    background: #2a2a3c; color: #a1a1aa; font-size: 13px; padding: 7px 12px;
+    border: none; border-radius: 8px; cursor: pointer; margin-bottom: 12px;
+  }
+  .stats {
+    background: #2a2a3c; padding: 14px; border-radius: 12px;
+    margin-bottom: 14px; display: none; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;
+  }
+  .stats.open { display: grid; }
+  .stat-card { background: #23233a; padding: 12px; border-radius: 10px; text-align: center; }
+  .stat-card .num { font-size: 22px; font-weight: bold; color: #6366f1; }
+  .stat-card .num.green { color: #22c55e; }
+  .stat-card .num.red { color: #ef4444; }
+  .stat-card .num.orange { color: #f59e0b; }
+  .stat-card .lbl { font-size: 11px; color: #a1a1aa; margin-top: 4px; }
+
+  .group-title {
+    font-size: 13px; color: #a1a1aa; text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 16px 0 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .group-title .count { color: #6366f1; font-weight: bold; }
+
+  .task {
+    background: #2a2a3c; padding: 12px 14px; border-radius: 10px;
+    margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px;
+    border-left: 3px solid transparent;
+  }
+  .task.overdue { border-left-color: #ef4444; }
+  .task.soon { border-left-color: #f59e0b; }
+  .task.done { opacity: 0.55; border-left-color: #22c55e; }
+  .task.done .text { text-decoration: line-through; color: #a1a1aa; }
+
+  .checkbox {
+    width: 22px; height: 22px; border-radius: 50%; border: 2px solid #6366f1;
+    cursor: pointer; flex-shrink: 0; margin-top: 2px; display: flex;
+    align-items: center; justify-content: center;
+  }
+  .checkbox.checked { background: #6366f1; }
+  .checkbox.checked::after { content: "✓"; color: white; font-size: 14px; }
+
+  .content { flex: 1; min-width: 0; }
+  .text { font-size: 15px; word-break: break-word; cursor: text; outline: none; }
+  .text:focus { background: #1e1e2e; border-radius: 4px; padding: 2px 4px; }
+
+  .meta { font-size: 12px; color: #a1a1aa; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .meta .deadline { color: #60a5fa; }
+  .meta .deadline.overdue { color: #ef4444; font-weight: bold; }
+  .meta .deadline.soon { color: #f59e0b; font-weight: bold; }
+  .meta .remind { color: #a78bfa; }
+  .meta .repeat { color: #22d3ee; }
+  .meta .done-ok { color: #22c55e; }
+  .meta .done-late { color: #ef4444; }
+
+  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .actions button {
+    background: #3f3f56; color: #e4e4e7; border: none;
+    font-size: 13px; padding: 6px 9px; border-radius: 6px; cursor: pointer;
+  }
+  .actions button:hover { background: #52527a; }
+
+  .empty { text-align: center; color: #71717a; padding: 40px 0; }
+
+  .alarm-banner {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: #ef4444; color: white; padding: 14px 20px; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 999; display: none;
+    max-width: 90%; text-align: center;
+  }
+  .alarm-banner button {
+    background: white; color: #ef4444; margin-top: 8px; font-weight: bold;
+    border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  }
+
+  .timer-box {
+    background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+    padding: 18px; border-radius: 12px; margin-bottom: 14px;
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  }
+  .timer-box.emp {
+    background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%);
+  }
+  .timer-box.emp.session {
+    background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+  }
+  .timer-box.disabled {
+    filter: grayscale(0.6); opacity: 0.6;
+  }
+  .timer-display {
+    font-family: ui-monospace, monospace; font-size: 34px; font-weight: bold;
+    color: #a5b4fc; letter-spacing: 2px; min-width: 130px;
+  }
+  .timer-box.emp.session .timer-display { color: #6ee7b7; }
+  .timer-display.running { color: #22c55e; animation: pulse 1.5s infinite; }
+  .timer-box.emp.session .timer-display.running { color: #6ee7b7; }
+  .timer-info { flex: 1; min-width: 180px; }
+  .timer-info .label { font-size: 12px; color: #a5b4fc; }
+  .timer-box.emp.session .timer-info .label { color: #6ee7b7; }
+  .timer-info .task-name { font-size: 15px; color: #e4e4e7; margin-top: 4px; font-weight: 500; word-break: break-word; }
+  .timer-info .who { font-size: 13px; color: #ddd6fe; margin-top: 4px; }
+  .timer-box.emp.session .timer-info .who { color: #a7f3d0; }
+  .timer-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .session-info {
+    flex-basis: 100%; margin-top: 6px;
+    background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px;
+    font-size: 13px; color: #a7f3d0;
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .session-info .stat-item { display: flex; gap: 6px; align-items: baseline; }
+  .session-info .stat-item .v { color: #6ee7b7; font-weight: bold; font-size: 15px; }
+
+  /* Срез дня */
+  .pulse-box {
+    background: #2a2a3c; padding: 14px; border-radius: 12px;
+    margin-top: 20px; margin-bottom: 14px;
+    border-left: 3px solid #6366f1;
+  }
+  .pulse-header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 12px;
+  }
+  .pulse-header h3 {
+    font-size: 15px; color: #a1a1aa;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pulse-row {
+    display: flex; gap: 8px; align-items: center;
+    padding: 6px 0;
+  }
+  .pulse-row input {
+    padding: 8px 10px; border-radius: 6px; border: 1px solid #3f3f56;
+    background: #1e1e2e; color: #e4e4e7; font-size: 14px;
+    font-family: inherit;
+  }
+  .pulse-row input.pulse-label {
+    flex: 1; min-width: 120px;
+  }
+  .pulse-row input.pulse-plan,
+  .pulse-row input.pulse-fact {
+    width: 80px;
+    font-family: ui-monospace, monospace;
+    text-align: center;
+  }
+  .pulse-row .pulse-sep {
+    color: #52527a; font-size: 14px; user-select: none;
+  }
+  .pulse-row input:focus { outline: none; border-color: #6366f1; }
+  .pulse-row .pulse-del {
+    background: transparent; color: #71717a; border: none;
+    font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 6px;
+  }
+  .pulse-row .pulse-del:hover { background: #7f1d1d; color: white; }
+
+  .gaps-scroll::-webkit-scrollbar { width: 6px; }
+  .gaps-scroll::-webkit-scrollbar-track { background: transparent; }
+  .gaps-scroll::-webkit-scrollbar-thumb { background: #3f3f56; border-radius: 3px; }
+  .gaps-scroll::-webkit-scrollbar-thumb:hover { background: #52527a; }
+  .gaps-scroll { scrollbar-width: thin; scrollbar-color: #3f3f56 transparent; }
+
+  .time-day {
+    background: #2a2a3c; border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  }
+  .time-day-header {
+    padding: 12px 16px; background: #23233a; display: flex;
+    justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    cursor: pointer; user-select: none;
+  }
+  .time-day-header .day-title { font-weight: 600; font-size: 15px; }
+  .time-day-header .day-total { font-size: 13px; color: #22c55e; font-weight: bold; }
+  .time-day-header .arrow { color: #a1a1aa; font-size: 12px; margin-left: 6px; }
+  .time-day-body { padding: 8px 12px 12px; }
+  .time-day.collapsed .time-day-body { display: none; }
+
+  .time-entry {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 10px 12px; background: #23233a; border-radius: 8px; margin-bottom: 6px;
+    border-left: 3px solid #22d3ee;
+  }
+  .time-entry.emp { border-left-color: #a78bfa; }
+  .time-entry.sync { border-left-color: #f97316; }
+  .time-entry .t-content { flex: 1; min-width: 0; }
+  .time-entry .t-text { font-size: 14px; word-break: break-word; cursor: text; outline: none; }
+  .time-entry .t-text:focus { background: #1e1e2e; border-radius: 4px; padding: 2px 4px; }
+  .time-entry .t-meta {
+    font-size: 12px; color: #a1a1aa; margin-top: 4px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .time-entry .t-time { color: #22d3ee; }
+  .time-entry .t-dur { color: #22c55e; font-weight: bold; }
+  .time-entry .t-dur.long { color: #f59e0b; }
+  .time-entry .t-emp { color: #a78bfa; font-weight: 600; }
+  .time-entry .t-sync { color: #fb923c; font-weight: 600; }
+
+  .time-summary {
+    background: #23233a; padding: 14px; border-radius: 12px;
+    margin-bottom: 14px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center;
+    justify-content: space-around;
+  }
+  .time-summary .big { font-size: 20px; font-weight: bold; color: #22c55e; }
+  .time-summary .big.green { color: #22c55e; }
+  .time-summary .big.orange { color: #f59e0b; }
+  .time-summary .lbl { font-size: 12px; color: #a1a1aa; }
+  .time-summary .info { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+
+  .emp-picker {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: #2a2a3c; padding: 10px 12px; border-radius: 12px;
+    margin-bottom: 12px;
+  }
+  .emp-picker label {
+    font-size: 13px; color: #a1a1aa; white-space: nowrap;
+  }
+  .emp-picker select {
+    flex: 1; min-width: 160px; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid #3f3f56; background: #1e1e2e; color: #e4e4e7;
+    font-size: 14px; cursor: pointer;
+  }
+  .emp-picker select:focus { outline: none; border-color: #a78bfa; }
+
+  .lock-notice {
+    background: #7c2d12; color: #fed7aa; font-size: 12px;
+    padding: 8px 12px; border-radius: 8px; margin-bottom: 8px;
+    display: none; align-items: center; gap: 8px;
+  }
+  .lock-notice.show { display: flex; }
+
+  .form-hint {
+    font-size: 11px; color: #a1a1aa; text-align: center; margin-top: -4px;
+  }
+  .form-hint b { color: #a78bfa; }
+
+  .calls-panel {
+    background: #0f172a; border-radius: 12px; padding: 14px;
+    margin-bottom: 14px; border: 1px solid #1e293b;
+    display: none;
+  }
+  .calls-panel.show { display: block; }
+
+  .call-live-row {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 10px 12px; background: #052e16; border-radius: 10px;
+    border: 1px solid #22c55e; margin-bottom: 12px;
+  }
+  .call-live-row .live-num {
+    font-family: ui-monospace, monospace; font-size: 15px; font-weight: bold;
+    color: #4ade80; min-width: 100px;
+  }
+  .call-live-row .live-timer {
+    font-family: ui-monospace, monospace; font-size: 18px; font-weight: bold;
+    color: #6ee7b7; min-width: 90px;
+  }
+  .call-live-row .live-input {
+    flex: 1; min-width: 200px;
+    padding: 9px 12px; border-radius: 8px; border: 1px solid #3f3f56;
+    background: #0f172a; color: #e4e4e7; font-size: 14px;
+    font-family: inherit;
+  }
+  .call-live-row .live-input:focus { outline: none; border-color: #22c55e; }
+  .call-live-row .mark-btns { display: flex; gap: 4px; }
+  .call-live-row .mark-btns button {
+    width: 38px; height: 38px; border-radius: 8px; border: none;
+    font-size: 16px; cursor: pointer;
+    background: #1e293b; color: #94a3b8; transition: all 0.15s;
+  }
+  .call-live-row .mark-btns button:hover { background: #334155; }
+  .call-live-row .mark-btns button.active-ok { background: #16a34a; color: white; }
+  .call-live-row .mark-btns button.active-fail { background: #dc2626; color: white; }
+
+  .call-live-row .action-btn {
+    padding: 9px 16px; border-radius: 8px; border: none;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    min-width: 110px;
+  }
+  .call-live-row .action-btn.start { background: #22c55e; color: white; }
+  .call-live-row .action-btn.start:hover { background: #16a34a; }
+  .call-live-row .action-btn.stop { background: #ef4444; color: white; }
+  .call-live-row .action-btn.stop:hover { background: #dc2626; }
+
+  .calls-header {
+    font-size: 12px; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.5px; margin: 12px 0 6px;
+    display: flex; justify-content: space-between;
+  }
+
+  .call-line {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px; background: #0f172a; border-radius: 8px;
+    margin-bottom: 4px; border-left: 3px solid #64748b;
+    font-size: 13px;
+  }
+  .call-line.mark-ok { border-left-color: #22c55e; }
+  .call-line.mark-fail { border-left-color: #ef4444; }
+  .call-line .cl-num {
+    font-family: ui-monospace, monospace; color: #94a3b8;
+    font-weight: bold; min-width: 30px;
+  }
+  .call-line .cl-time {
+    font-family: ui-monospace, monospace; color: #e4e4e7; min-width: 110px;
+  }
+  .call-line .cl-dur { color: #22c55e; font-weight: bold; min-width: 70px; }
+  .call-line .cl-mark { font-size: 15px; min-width: 22px; text-align: center; }
+  .call-line .cl-os {
+    flex: 1; color: #a1a1aa; min-width: 150px;
+    cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  }
+  .call-line .cl-os:hover { background: #1e293b; color: #e4e4e7; }
+  .call-line .cl-os.empty { color: #52525b; font-style: italic; }
+  .call-line .cl-actions { display: flex; gap: 4px; }
+  .call-line .cl-actions button {
+    background: transparent; color: #64748b; border: none;
+    font-size: 13px; padding: 3px 6px; border-radius: 4px; cursor: pointer;
+  }
+  .call-line .cl-actions button:hover { background: #1e293b; color: #e4e4e7; }
+
+  .sessions-history {
+    background: #2a2a3c; padding: 14px; border-radius: 12px;
+    margin-bottom: 14px;
+  }
+  .sessions-history h3 {
+    font-size: 15px; margin-bottom: 10px; color: #a1a1aa;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .session-accordion {
+    background: #23233a; border-radius: 10px; margin-bottom: 8px;
+    overflow: hidden; border-left: 3px solid #10b981;
+  }
+  .session-acc-header {
+    padding: 12px 14px; display: flex; gap: 10px; align-items: center;
+    flex-wrap: wrap; cursor: pointer; user-select: none;
+    transition: background 0.15s;
+  }
+  .session-acc-header:hover { background: #2d2d44; }
+  .session-acc-header .sa-arrow { color: #a1a1aa; font-size: 11px; transition: transform 0.2s; }
+  .session-accordion.open .sa-arrow { transform: rotate(90deg); }
+  .session-acc-header .sa-title { flex: 1; min-width: 200px; font-size: 14px; }
+  .session-acc-header .sa-meta {
+    font-size: 12px; color: #a1a1aa; display: flex; gap: 12px; flex-wrap: wrap;
+  }
+  .session-acc-header .sa-stat { color: #6ee7b7; }
+  .session-acc-header .sa-fail { color: #fca5a5; }
+  .session-acc-body { padding: 0 14px 12px; display: none; }
+  .session-accordion.open .session-acc-body { display: block; }
+  .session-acc-body .sess-stat {
+    font-size: 13px; color: #a1a1aa; margin-bottom: 10px;
+    padding: 8px 10px; background: #1a1a2a; border-radius: 6px;
+  }
+  .session-acc-body .sess-stat b { color: #e4e4e7; }
+  .session-acc-actions {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid #2d2d44;
+  }
+  .session-acc-actions button {
+    background: #3f3f56; color: #e4e4e7; border: none;
+    font-size: 12px; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .session-acc-actions button:hover { background: #52527a; }
+
+  .sess-notes {
+    font-size: 13px; color: #cbd5e1; margin-top: 8px;
+    padding: 8px 10px; background: #1a1a2a; border-radius: 6px;
+    font-style: italic; white-space: pre-wrap; word-break: break-word;
+  }
+
+  .session-notes-block { margin-top: 12px; }
+  .session-notes-block label {
+    font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px;
+  }
+  .session-notes-block textarea {
+    width: 100%; min-height: 70px; padding: 10px 12px;
+    border-radius: 8px; border: 1px solid #3f3f56;
+    background: #0f172a; color: #e4e4e7; font-size: 13px;
+    font-family: inherit; resize: vertical; color-scheme: dark;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Задачник</h1>
+    <div class="header-actions">
+      <button id="exportBtn" title="Скачать бэкап JSON">📦 Экспорт</button>
+      <button id="importBtn" title="Загрузить из файла">📥 Импорт</button>
+      <button id="linkAutosaveBtn" title="Привязать файл для автосохранения">🔗 Автосохр.</button>
+      <button class="accent" id="dailyReportBtn" style="background:#22c55e">📊 Итог дня</button>
+      <button class="accent" id="addEmpBtn">+ Добавить КМ</button>
+      <button class="warn" id="delEmpBtn" disabled>🗑 Удалить КМ</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </div>
+  </div>
+
+  <div class="backup-banner" id="backupBanner">
+    <span class="txt" id="backupBannerText">⚠️ Давно не делал бэкап</span>
+    <button id="bannerExportBtn">📦 Экспорт сейчас</button>
+    <button class="close" id="bannerClose">✕</button>
+  </div>
+
+  <div class="tabs">
+    <button data-tab="tasks" class="active">📋 Задачи</button>
+    <button data-tab="time">⏱ Моё время</button>
+    <button data-tab="team">👥 Сотрудники</button>
+  </div>
+
+  <div class="tab-panel active" id="panel-tasks">
+    <div class="add-box">
+      <input type="text" id="newText" placeholder="Что нужно сделать?" autocomplete="off">
+      <div class="row">
+        <div class="field-group">
+          <label>📅 Срок исполнения</label>
+          <input type="datetime-local" id="newDeadline">
+          <div class="quick-btns">
+            <button data-target="newDeadline" data-when="today">Сегодня 18:00</button>
+            <button data-target="newDeadline" data-when="tomorrow">Завтра 18:00</button>
+            <button data-target="newDeadline" data-when="week">+1 неделя</button>
+            <button data-target="newDeadline" data-when="clear">✕</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>🔔 Напоминание</label>
+          <input type="datetime-local" id="newRemind">
+          <div class="quick-btns">
+            <button data-target="newRemind" data-when="hour">Через час</button>
+            <button data-target="newRemind" data-when="morning">Завтра 9:00</button>
+            <button data-target="newRemind" data-when="clear">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field-group">
+          <label>🔁 Повтор</label>
+          <select id="newRepeat">
+            <option value="">Без повтора</option>
+            <option value="daily">Каждый день</option>
+            <option value="weekdays">По будням</option>
+            <option value="weekly">Каждую неделю</option>
+            <option value="monthly">Каждый месяц</option>
+          </select>
+        </div>
+      </div>
+      <button class="primary" id="addBtn">+ Добавить задачу</button>
+    </div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Поиск по тексту...">
+    </div>
+    <div class="filters">
+      <button data-filter="active" class="active">Активные</button>
+      <button data-filter="today">На сегодня</button>
+      <button data-filter="overdue">Просроченные</button>
+      <button data-filter="done">Выполненные</button>
+      <button data-filter="all">Все</button>
+    </div>
+    <button class="stats-toggle" id="statsToggle">📊 Показать статистику</button>
+    <div class="stats" id="statsBox"></div>
+    <div id="list"></div>
+  </div>
+
+  <div class="tab-panel" id="panel-time">
+    <div class="lock-notice" id="myLockNotice">
+      ⏸ Твой таймер сейчас неактивен: идёт сессия с КМ. Останови её, чтобы запустить свой.
+    </div>
+
+    <div class="timer-box" id="myTimerBox">
+      <div class="timer-display" id="timerDisplay">00:00:00</div>
+      <div class="timer-info">
+        <div class="label">Моя текущая задача</div>
+        <div class="task-name" id="timerTask">— не запущен —</div>
+      </div>
+      <div class="timer-btns">
+        <button class="success" id="timerStartBtn">▶ Старт</button>
+        <button class="stop" id="timerStopBtn" style="display:none">■ Стоп и сохранить</button>
+      </div>
+    </div>
+
+    <div class="add-box">
+      <input type="text" id="workText" placeholder="Чем занимался? (суть работы)" autocomplete="off">
+      <div class="row">
+        <div class="field-group">
+          <label>📅 Дата</label>
+          <input type="date" id="workDate">
+        </div>
+        <div class="field-group">
+          <label>🟢 Начало</label>
+          <input type="time" id="workStart">
+          <div class="quick-btns">
+            <button data-t="workStart" data-when="now">Сейчас</button>
+            <button data-t="workStart" data-when="9">09:00</button>
+            <button data-t="workStart" data-when="10">10:00</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>🔴 Конец</label>
+          <input type="time" id="workEnd">
+          <div class="quick-btns">
+            <button data-t="workEnd" data-when="now">Сейчас</button>
+            <button data-t="workEnd" data-when="13">13:00</button>
+            <button data-t="workEnd" data-when="18">18:00</button>
+          </div>
+        </div>
+      </div>
+      <button class="primary" id="addWorkBtn">✓ Зафиксировать</button>
+    </div>
+
+    <div class="time-summary" id="timeSummary"></div>
+
+    <div class="filters">
+      <button data-tfilter="today" class="active">Сегодня</button>
+      <button data-tfilter="week">За 7 дней</button>
+      <button data-tfilter="all">Все записи</button>
+      <button id="reportBtn" style="margin-left:auto;background:#22c55e;color:white;">📤 Отчёт по мне</button>
+    </div>
+
+    <div id="timeList"></div>
+
+    <div class="pulse-box" id="pulseBox">
+      <div class="pulse-header">
+        <h3>📊 Срез дня <span id="pulseDateLabel" style="color:#a1a1aa;font-weight:400;font-size:13px"></span></h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="pulseAddBtn" style="background:#6366f1;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px">+ Поле</button>
+          <button id="pulseCopyBtn" style="background:#22c55e;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">📋 Копировать</button>
+        </div>
+      </div>
+      <div id="pulseList"></div>
+      <div class="form-hint" id="pulseHint" style="display:none">
+        Пока пусто — нажми <b>+ Поле</b>, чтобы добавить первую строку
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-panel" id="panel-team">
+
+    <div class="emp-picker">
+      <label>👥 КМ:</label>
+      <select id="empActiveSelect">
+        <option value="">— выбери КМ —</option>
+      </select>
+    </div>
+
+    <div class="lock-notice" id="empLockNotice">
+      ⏸ Сессия сейчас неактивна: идёт мой таймер. Останови его, чтобы запустить сессию.
+    </div>
+
+    <div class="timer-box emp" id="empTimerBox">
+      <div class="timer-display" id="empTimerDisplay">00:00:00</div>
+      <div class="timer-info">
+        <div class="label" id="empTimerLabel">Сессия с КМ</div>
+        <div class="task-name" id="empTimerTask">— не запущена —</div>
+        <div class="who" id="empTimerWho"></div>
+      </div>
+      <div class="timer-btns">
+        <button class="success" id="empTimerStartBtn">▶ Старт</button>
+        <button class="stop" id="empTimerStopBtn" style="display:none">■ Завершить сессию</button>
+      </div>
+      <div class="session-info" id="sessionInfo" style="display:none"></div>
+    </div>
+
+    <div class="calls-panel" id="callsPanel">
+      <div class="call-live-row" id="callLiveRow">
+        <span class="live-num" id="liveNum">— нет звонка —</span>
+        <span class="live-timer" id="liveTimer"></span>
+        <div class="mark-btns">
+          <button id="markOkBtn" title="Есть диалог">✅</button>
+          <button id="markFailBtn" title="Отказ или иная причина">❌</button>
+        </div>
+        <input type="text" class="live-input" id="liveOS" placeholder="ОС по звонку...">
+        <button class="action-btn start" id="callStartBtn">▶️ Набор</button>
+        <button class="action-btn stop" id="callEndBtn" style="display:none">⏹ Отбой</button>
+      </div>
+
+      <div class="calls-header">
+        <span>Завершённые звонки</span>
+        <span id="callsCountLabel"></span>
+      </div>
+
+      <div id="callsList"></div>
+
+      <div class="session-notes-block">
+        <label>📝 Заметки по сессии</label>
+        <textarea id="sessionNotes" placeholder="Общие заметки, выводы, план на следующий раз..."></textarea>
+      </div>
+    </div>
+
+    <div class="add-box" id="sessionStartBox">
+      <div class="field-group">
+        <label>🎧 Тема / цель сессии</label>
+        <input type="text" id="sessionTopic" placeholder="Например: обзвон базы октября" autocomplete="off">
+      </div>
+      <div class="form-hint">
+        ⓘ Кнопка ▶ Старт запускает сессию и одновременно — мой таймер с пометкой «Работа с ...»
+      </div>
+    </div>
+
+    <div class="time-summary" id="empSummary"></div>
+
+    <div class="filters">
+      <button data-etfilter="today" class="active">Сегодня</button>
+      <button data-etfilter="week">За 7 дней</button>
+      <button data-etfilter="all">Все записи</button>
+      <button id="teamReportBtn" style="margin-left:auto;background:#a78bfa;color:white;">📤 Отчёт по команде</button>
+    </div>
+
+    <div id="empList"></div>
+
+    <div class="sessions-history" id="sessionsHistory">
+      <h3>📂 История сессий с КМ</h3>
+      <div id="sessionsList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="alarm-banner" id="alarmBanner">
+  <div id="alarmText">🔔 Напоминание!</div>
+  <button onclick="stopAlarm()">Стоп</button>
+</div>
+
+<div class="autosave-status" id="autosaveStatus">
+  <span class="dot"></span>
+  <span id="autosaveText">автосохранение</span>
+</div>
+
+<script>
+/* ============================================================
+   КЛЮЧИ ХРАНЕНИЯ
+============================================================ */
+const KEYS = {
+  tasks: 'tasker_data_v1_tasks',
+  work: 'tasker_data_v1_work',
+  emp: 'tasker_data_v1_emp',
+  empWork: 'tasker_data_v1_empwork',
+  timer: 'tasker_data_v1_timer',
+  empTimer: 'tasker_data_v1_emptimer',
+  meta: 'tasker_data_v1_meta',
+  sessions: 'tasker_data_v1_sessions',
+  pulse: 'tasker_data_v1_pulse'
+};
+
+let tasks = JSON.parse(localStorage.getItem(KEYS.tasks) || '[]');
+let workLog = JSON.parse(localStorage.getItem(KEYS.work) || '[]');
+let employees = JSON.parse(localStorage.getItem(KEYS.emp) || '[]');
+let empWorkLog = JSON.parse(localStorage.getItem(KEYS.empWork) || '[]');
+let sessions = JSON.parse(localStorage.getItem(KEYS.sessions) || '[]');
+let activeTimer = JSON.parse(localStorage.getItem(KEYS.timer) || 'null');
+let activeEmpTimer = JSON.parse(localStorage.getItem(KEYS.empTimer) || 'null');
+let meta = JSON.parse(localStorage.getItem(KEYS.meta) || '{"lastExport":null,"firstRun":' + Date.now() + '}');
+let dailyPulse = JSON.parse(localStorage.getItem(KEYS.pulse) || '{}');
+
+let filter = 'active';
+let timeFilter = 'today';
+let empTimeFilter = 'today';
+let searchQuery = '';
+let activeEmpFilter = null;
+let activeEmpCard = null;
+let expandedSessions = new Set();
+let alarmAudioCtx = null;
+let alarmInterval = null;
+let timerTickId = null;
+let empTimerTickId = null;
+let callTickId = null;
+let currentDraft = { mark: null, os: '' };
+
+/* ============================================================
+   НАСТРОЙКИ РАБОЧЕГО ДНЯ
+============================================================ */
+const WORK_DAY_HOURS = 8;
+const WORK_WINDOW_START = 9;
+const WORK_WINDOW_END = 18;
+
+/* ============================================================
+   СОХРАНЕНИЕ
+============================================================ */
+let autoSaveFileHandle = null;
+
+function saveLocal() {
+  localStorage.setItem(KEYS.tasks, JSON.stringify(tasks));
+  localStorage.setItem(KEYS.work, JSON.stringify(workLog));
+  localStorage.setItem(KEYS.emp, JSON.stringify(employees));
+  localStorage.setItem(KEYS.empWork, JSON.stringify(empWorkLog));
+  localStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
+  localStorage.setItem(KEYS.pulse, JSON.stringify(dailyPulse));
+  if (activeTimer) localStorage.setItem(KEYS.timer, JSON.stringify(activeTimer));
+  else localStorage.removeItem(KEYS.timer);
+  if (activeEmpTimer) localStorage.setItem(KEYS.empTimer, JSON.stringify(activeEmpTimer));
+  else localStorage.removeItem(KEYS.empTimer);
+  localStorage.setItem(KEYS.meta, JSON.stringify(meta));
+}
+
+let saveFileDebounce = null;
+function saveToFile() {
+  if (!autoSaveFileHandle) return;
+  if (saveFileDebounce) clearTimeout(saveFileDebounce);
+  saveFileDebounce = setTimeout(async () => {
+    try {
+      setStatus('saving', 'сохранение в файл...');
+      const data = buildExportData();
+      const writable = await autoSaveFileHandle.createWritable();
+      await writable.write(JSON.stringify(data, null, 2));
+      await writable.close();
+      meta.lastAutoSave = Date.now();
+      localStorage.setItem(KEYS.meta, JSON.stringify(meta));
+      setStatus('ok', 'автосохранено ' + new Date().toLocaleTimeString());
+    } catch(e) {
+      setStatus('error', 'ошибка автосохранения');
+      console.error(e);
+    }
+  }, 800);
+}
+function save() { saveLocal(); saveToFile(); }
+
+function setStatus(kind, text) {
+  const el = document.getElementById('autosaveStatus');
+  if (!el) return;
+  el.className = 'autosave-status' + (kind === 'saving' ? ' saving' : kind === 'error' ? ' error' : '');
+  document.getElementById('autosaveText').textContent = text;
+}
+function buildExportData() {
+  return {
+    version: 18,
+    exported: new Date().toISOString(),
+    tasks, workLog, employees, empWorkLog, sessions, dailyPulse
+  };
+}
+
+/* ============================================================
+   УТИЛИТЫ
+============================================================ */
+function pad(n) { return String(n).padStart(2, '0'); }
+function toLocalInput(ts) { if (!ts) return ''; const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function fromLocalInput(val) { if (!val) return null; const t = new Date(val).getTime(); return isNaN(t) ? null : t; }
+function formatDate(d) { return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function formatTime(ts) { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function formatTimeShort(ts) { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function isSameDay(a, b) { return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function todayInput() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function fmtDur(ms) { const tm = Math.round(ms/60000); return `${Math.floor(tm/60)}ч ${pad(tm%60)}м`; }
+function fmtDurShort(ms) { const tm = Math.round(ms/60000); const h = Math.floor(tm/60); const m = tm%60; return h === 0 ? `${m}м` : `${h}ч ${m}м`; }
+function fmtHMS(ms) { const s = Math.floor(ms/1000); return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`; }
+function fmtDurCall(ms) {
+  const s = Math.floor(ms/1000);
+  if (s < 60) return `${s}с`;
+  const m = Math.floor(s/60); const ss = s%60;
+  if (m < 60) return `${m}м ${pad(ss)}с`;
+  return `${Math.floor(m/60)}ч ${pad(m%60)}м`;
+}
+function plural(n, one, few, many) { const m10 = n%10, m100 = n%100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many; }
+
+/* ============================================================
+   ВКЛАДКИ
+============================================================ */
+document.querySelectorAll('.tabs button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'time') { renderWork(); renderPulse(); updateTimerLocks(); }
+    if (btn.dataset.tab === 'team') { renderTeam(); renderSessionsHistory(); updateTimerLocks(); }
+    updateTopButtons();
+  };
+});
+
+/* ============================================================
+   ШАПКА
+============================================================ */
+function updateTopButtons() {
+  const activeTabBtn = document.querySelector('.tabs button.active');
+  if (!activeTabBtn) return;
+  const isTeam = activeTabBtn.dataset.tab === 'team';
+  const addBtn = document.getElementById('addEmpBtn');
+  const delBtn = document.getElementById('delEmpBtn');
+  if (addBtn) addBtn.disabled = !isTeam;
+  if (delBtn) delBtn.disabled = !(isTeam && activeEmpCard !== null);
+}
+
+document.getElementById('addEmpBtn').onclick = () => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:380px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">➕ Новый КМ</h3>
+    <input type="text" id="newEmpNameModal" placeholder="Имя КМ" autocomplete="off"
+      style="width:100%;padding:11px 12px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;font-size:15px;margin-bottom:14px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="empCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
+      <button id="empSave" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:500">Добавить</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const inp = wrap.querySelector('#newEmpNameModal');
+  inp.focus();
+  const doAdd = () => {
+    const name = inp.value.trim();
+    if (!name) { inp.focus(); return; }
+    const newId = Date.now() + Math.random();
+    employees.push({ id: newId, name, created: Date.now() });
+    activeEmpCard = newId;
+    save();
+    wrap.remove();
+    renderTeam();
+    updateTopButtons();
+  };
+  wrap.querySelector('#empCancel').onclick = () => wrap.remove();
+  wrap.querySelector('#empSave').onclick = doAdd;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+};
+
+document.getElementById('delEmpBtn').onclick = () => {
+  if (activeEmpCard === null) return;
+  const emp = employees.find(e => e.id === activeEmpCard);
+  if (!emp) return;
+  if (confirm(`Удалить КМ «${emp.name}»? Записи его времени и сессии останутся в базе.`)) {
+    employees = employees.filter(x => x.id !== emp.id);
+    if (activeEmpCard === emp.id) activeEmpCard = null;
+    if (activeEmpFilter === emp.id) activeEmpFilter = null;
+    save();
+    renderTeam();
+    updateTopButtons();
+  }
+};
+
+/* ============================================================
+   ЗАДАЧИ
+============================================================ */
+const listEl = document.getElementById('list');
+const newText = document.getElementById('newText');
+const newDeadline = document.getElementById('newDeadline');
+const newRemind = document.getElementById('newRemind');
+const newRepeat = document.getElementById('newRepeat');
+const searchInput = document.getElementById('searchInput');
+
+document.querySelectorAll('.quick-btns button[data-target]').forEach(btn => {
+  btn.onclick = () => {
+    const input = document.getElementById(btn.dataset.target);
+    if (!input) return;
+    const when = btn.dataset.when;
+    const d = new Date();
+    if (when === 'clear') { input.value = ''; return; }
+    if (when === 'today') { d.setHours(18, 0, 0, 0); }
+    else if (when === 'tomorrow') { d.setDate(d.getDate()+1); d.setHours(18, 0, 0, 0); }
+    else if (when === 'week') { d.setDate(d.getDate()+7); d.setHours(18, 0, 0, 0); }
+    else if (when === 'hour') { d.setHours(d.getHours()+1, 0, 0, 0); }
+    else if (when === 'morning') { d.setDate(d.getDate()+1); d.setHours(9, 0, 0, 0); }
+    input.value = toLocalInput(d.getTime());
+  };
+});
+
+function taskMatchesSearch(t) {
+  if (!searchQuery) return true;
+  return t.text.toLowerCase().includes(searchQuery.toLowerCase());
+}
+function groupKey(t, now) {
+  if (t.done) return 'done';
+  if (!t.deadline) return 'nodate';
+  const d = new Date(t.deadline);
+  const today = new Date();
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate()+7);
+  if (t.deadline < now) return 'overdue';
+  if (isSameDay(d, today)) return 'today';
+  if (isSameDay(d, tomorrow)) return 'tomorrow';
+  if (d < weekEnd) return 'week';
+  return 'later';
+}
+function render() {
+  listEl.innerHTML = '';
+  const now = Date.now();
+  let filtered = tasks.filter(t => {
+    if (!taskMatchesSearch(t)) return false;
+    if (filter === 'active') return !t.done;
+    if (filter === 'done') return t.done;
+    if (filter === 'overdue') return !t.done && t.deadline && t.deadline < now;
+    if (filter === 'today') {
+      if (t.done || !t.deadline) return false;
+      return isSameDay(new Date(t.deadline), new Date());
+    }
+    return true;
+  });
+  renderStats();
+  if (filtered.length === 0) { listEl.innerHTML = '<div class="empty">Пока пусто ✨</div>'; return; }
+  const groups = { overdue: [], today: [], tomorrow: [], week: [], later: [], nodate: [], done: [] };
+  filtered.forEach(t => groups[groupKey(t, now)].push(t));
+  const groupMeta = [
+    ['overdue', '🔴 Просрочено'], ['today', '📌 Сегодня'], ['tomorrow', '⏭ Завтра'],
+    ['week', '📅 На этой неделе'], ['later', '🗓 Позже'], ['nodate', '📭 Без срока'],
+    ['done', '✅ Выполненные'],
+  ];
+  groupMeta.forEach(([key, title]) => {
+    const items = groups[key];
+    if (!items.length) return;
+    items.sort((a,b) => { const av=a.deadline||a.remind||Infinity, bv=b.deadline||b.remind||Infinity;
+      return av!==bv ? av-bv : b.created-a.created; });
+    const h = document.createElement('div');
+    h.className = 'group-title';
+    h.innerHTML = `${title} <span class="count">${items.length}</span>`;
+    listEl.appendChild(h);
+    items.forEach(t => listEl.appendChild(renderTask(t, now)));
+  });
+}
+function renderTask(t, now) {
+  const div = document.createElement('div');
+  div.className = 'task' + (t.done ? ' done' : '');
+  if (!t.done && t.deadline) {
+    const diff = t.deadline - now;
+    if (diff < 0) div.classList.add('overdue'); else if (diff < 24*3600*1000) div.classList.add('soon');
+  }
+  const cb = document.createElement('div');
+  cb.className = 'checkbox' + (t.done ? ' checked' : '');
+  cb.onclick = () => toggleDone(t.id);
+  const content = document.createElement('div'); content.className = 'content';
+  const text = document.createElement('div'); text.className = 'text'; text.textContent = t.text;
+  text.contentEditable = 'true';
+  text.onblur = () => { const v = text.textContent.trim();
+    if (v && v !== t.text) { t.text = v; save(); } else text.textContent = t.text; };
+  text.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); text.blur(); } };
+  content.appendChild(text);
+  const meta = document.createElement('div'); meta.className = 'meta';
+  if (t.deadline) { const span = document.createElement('span'); span.className = 'deadline';
+    const diff = t.deadline - now;
+    if (!t.done && diff < 0) span.classList.add('overdue'); else if (!t.done && diff < 24*3600*1000) span.classList.add('soon');
+    span.textContent = '📅 ' + formatDate(new Date(t.deadline)); meta.appendChild(span); }
+  if (t.remind) { const s = document.createElement('span'); s.className='remind';
+    s.textContent='🔔 '+formatDate(new Date(t.remind)); meta.appendChild(s); }
+  if (t.repeat) { const s = document.createElement('span'); s.className='repeat';
+    const l = {daily:'🔁 ежедневно',weekdays:'🔁 по будням',weekly:'🔁 еженедельно',monthly:'🔁 ежемесячно'};
+    s.textContent=l[t.repeat]||''; meta.appendChild(s); }
+  if (t.done && t.doneAt) { const s = document.createElement('span');
+    const wasLate = t.deadline && t.doneAt > t.deadline;
+    s.className = wasLate ? 'done-late' : 'done-ok';
+    s.textContent = (wasLate?'🔴 с опозданием: ':'🟢 ')+formatDate(new Date(t.doneAt));
+    meta.appendChild(s); }
+  if (meta.children.length) content.appendChild(meta);
+  const actions = document.createElement('div'); actions.className = 'actions';
+  const editBtn = document.createElement('button'); editBtn.textContent = '📝';
+  editBtn.onclick = () => openEditDialog(t.id);
+  const delBtn = document.createElement('button'); delBtn.className='danger'; delBtn.textContent='🗑';
+  delBtn.onclick = () => { if (confirm('Удалить задачу безвозвратно?')) { tasks = tasks.filter(x => x.id !== t.id); save(); render(); } };
+  actions.appendChild(editBtn); actions.appendChild(delBtn);
+  div.appendChild(cb); div.appendChild(content); div.appendChild(actions);
+  return div;
+}
+function addTask() {
+  let text = newText.value.trim(); if (!text) { newText.focus(); return; }
+  tasks.push({ id: Date.now()+Math.random(), text,
+    deadline: fromLocalInput(newDeadline.value), remind: fromLocalInput(newRemind.value),
+    repeat: newRepeat.value || null,
+    done: false, doneAt: null, notified: false, created: Date.now() });
+  save();
+  newText.value=''; newDeadline.value=''; newRemind.value=''; newRepeat.value='';
+  newText.focus(); render();
+}
+function nextRepeatDate(ts, repeat) {
+  const d = new Date(ts);
+  if (repeat==='daily') d.setDate(d.getDate()+1);
+  else if (repeat==='weekdays') { do { d.setDate(d.getDate()+1); } while (d.getDay()===0||d.getDay()===6); }
+  else if (repeat==='weekly') d.setDate(d.getDate()+7);
+  else if (repeat==='monthly') d.setMonth(d.getMonth()+1);
+  else return null;
+  return d.getTime();
+}
+function toggleDone(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  if (!t.done) {
+    t.done = true; t.doneAt = Date.now();
+    if (t.repeat) {
+      const baseDeadline = t.deadline || Date.now();
+      tasks.push({ id: Date.now()+Math.random(), text: t.text,
+        deadline: nextRepeatDate(baseDeadline, t.repeat),
+        remind: t.remind ? nextRepeatDate(t.remind, t.repeat) : null,
+        repeat: t.repeat,
+        done: false, doneAt: null, notified: false, created: Date.now() });
+    }
+  } else { t.done=false; t.doneAt=null; t.notified=false; }
+  save(); render();
+}
+function openEditDialog(id) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:440px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">Редактировать</h3>
+    <label style="font-size:13px;color:#a1a1aa">📅 Срок</label>
+    <input type="datetime-local" id="editDeadline" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+    <label style="font-size:13px;color:#a1a1aa">🔔 Напоминание</label>
+    <input type="datetime-local" id="editRemind" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+    <label style="font-size:13px;color:#a1a1aa">🔁 Повтор</label>
+    <select id="editRepeat" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 16px">
+      <option value="">Без повтора</option><option value="daily">Каждый день</option>
+      <option value="weekdays">По будням</option><option value="weekly">Каждую неделю</option>
+      <option value="monthly">Каждый месяц</option>
+    </select>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="editCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
+      <button id="editSave" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Сохранить</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('#editDeadline').value = toLocalInput(t.deadline);
+  wrap.querySelector('#editRemind').value = toLocalInput(t.remind);
+  wrap.querySelector('#editRepeat').value = t.repeat || '';
+  wrap.querySelector('#editCancel').onclick = () => wrap.remove();
+  wrap.querySelector('#editSave').onclick = () => {
+    t.deadline = fromLocalInput(wrap.querySelector('#editDeadline').value);
+    t.remind = fromLocalInput(wrap.querySelector('#editRemind').value);
+    t.repeat = wrap.querySelector('#editRepeat').value || null;
+    t.notified = false; save(); render(); wrap.remove();
+  };
+}
+function renderStats() {
+  const box = document.getElementById('statsBox');
+  if (!box || !box.classList.contains('open')) return;
+  const now = Date.now();
+  const dayStart = new Date(); dayStart.setHours(0,0,0,0);
+  const weekStart = new Date(); weekStart.setDate(weekStart.getDate()-7);
+  const doneToday = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStart.getTime()).length;
+  const doneWeek = tasks.filter(t => t.done && t.doneAt && t.doneAt >= weekStart.getTime()).length;
+  const doneTotal = tasks.filter(t => t.done).length;
+  const activeTotal = tasks.filter(t => !t.done).length;
+  const overdue = tasks.filter(t => !t.done && t.deadline && t.deadline < now).length;
+  const doneOnTime = tasks.filter(t => t.done && (!t.deadline || t.doneAt <= t.deadline)).length;
+  const pct = doneTotal ? Math.round(doneOnTime/doneTotal*100) : 0;
+  box.innerHTML = `
+    <div class="stat-card"><div class="num green">${doneToday}</div><div class="lbl">сегодня</div></div>
+    <div class="stat-card"><div class="num green">${doneWeek}</div><div class="lbl">за 7 дней</div></div>
+    <div class="stat-card"><div class="num">${activeTotal}</div><div class="lbl">активных</div></div>
+    <div class="stat-card"><div class="num red">${overdue}</div><div class="lbl">просрочено</div></div>
+    <div class="stat-card"><div class="num">${doneTotal}</div><div class="lbl">всего сделано</div></div>
+    <div class="stat-card"><div class="num ${pct>=70?'green':pct>=40?'orange':'red'}">${pct}%</div><div class="lbl">в срок</div></div>
+  `;
+}
+document.getElementById('statsToggle').onclick = () => {
+  const b = document.getElementById('statsBox'); b.classList.toggle('open');
+  document.getElementById('statsToggle').textContent = b.classList.contains('open') ? '📊 Скрыть статистику' : '📊 Показать статистику';
+  renderStats();
+};
+document.querySelectorAll('.filters button[data-filter]').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.filters button[data-filter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); filter = btn.dataset.filter; render();
+  };
+});
+if (searchInput) searchInput.oninput = () => { searchQuery = searchInput.value.trim(); render(); };
+document.getElementById('addBtn').onclick = addTask;
+newText.addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+
+/* ============================================================
+   МОЁ ВРЕМЯ
+============================================================ */
+const workText = document.getElementById('workText');
+const workDate = document.getElementById('workDate');
+const workStart = document.getElementById('workStart');
+const workEnd = document.getElementById('workEnd');
+const timeList = document.getElementById('timeList');
+const timeSummary = document.getElementById('timeSummary');
+
+workDate.value = todayInput();
+workStart.value = '09:00';
+workEnd.value = '18:00';
+
+document.querySelectorAll('.quick-btns button[data-t]').forEach(btn => {
+  btn.onclick = () => {
+    const el = document.getElementById(btn.dataset.t);
+    if (!el) return;
+    const when = btn.dataset.when;
+    if (when === 'now') { const d = new Date(); el.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+    else { el.value = `${when.padStart(2,'0')}:00`; }
+  };
+});
+
+function updateTimerLocks() {
+  const myStartBtn = document.getElementById('timerStartBtn');
+  const empStartBtn = document.getElementById('empTimerStartBtn');
+  const myLock = document.getElementById('myLockNotice');
+  const empLock = document.getElementById('empLockNotice');
+  const myBox = document.getElementById('myTimerBox');
+  const empBox = document.getElementById('empTimerBox');
+  if (!myStartBtn || !empStartBtn) return;
+
+  const empBusy = !!activeEmpTimer;
+  const myBusy = !!activeTimer && !activeTimer.syncEmployeeId;
+
+  if (empBusy && !myBusy) {
+    myStartBtn.disabled = true;
+    myLock.classList.add('show');
+    myBox.classList.add('disabled');
+  } else {
+    myStartBtn.disabled = false;
+    myLock.classList.remove('show');
+    myBox.classList.remove('disabled');
+  }
+
+  if (myBusy && !empBusy) {
+    empStartBtn.disabled = true;
+    empLock.classList.add('show');
+    empBox.classList.add('disabled');
+  } else {
+    empStartBtn.disabled = false;
+    empLock.classList.remove('show');
+    empBox.classList.remove('disabled');
+  }
+}
+
+function updateTimerDisplay() {
+  const disp = document.getElementById('timerDisplay');
+  const taskEl = document.getElementById('timerTask');
+  const startBtn = document.getElementById('timerStartBtn');
+  const stopBtn = document.getElementById('timerStopBtn');
+  if (!disp) return;
+  if (activeTimer && !activeTimer.syncEmployeeId) {
+    const elapsed = Date.now() - activeTimer.startTs;
+    disp.textContent = fmtHMS(elapsed);
+    disp.classList.add('running');
+    taskEl.textContent = activeTimer.text;
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+  } else {
+    disp.textContent = '00:00:00';
+    disp.classList.remove('running');
+    taskEl.textContent = '— не запущен —';
+    startBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+  }
+  updateTimerLocks();
+}
+
+document.getElementById('timerStartBtn').onclick = () => {
+  if (activeEmpTimer) {
+    alert('⏸ Сейчас идёт сессия с КМ.\n\nСначала останови её.');
+    return;
+  }
+  const text = workText.value.trim();
+  if (!text) { alert('Впиши в поле «Чем занимался?» суть работы'); workText.focus(); return; }
+  activeTimer = { text, startTs: Date.now(), logId: null };
+  save(); updateTimerDisplay();
+  if (timerTickId) clearInterval(timerTickId);
+  timerTickId = setInterval(updateTimerDisplay, 1000);
+};
+
+document.getElementById('timerStopBtn').onclick = () => {
+  if (!activeTimer) return;
+  const endTs = Date.now();
+  const d = new Date(activeTimer.startTs);
+  workLog.push({
+    id: Date.now() + Math.random(),
+    text: activeTimer.text,
+    date: `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
+    start: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    end: `${pad(new Date(endTs).getHours())}:${pad(new Date(endTs).getMinutes())}`,
+    startTs: activeTimer.startTs, endTs, created: Date.now()
+  });
+  activeTimer = null;
+  save();
+  if (timerTickId) clearInterval(timerTickId);
+  updateTimerDisplay();
+  workText.value = ''; renderWork();
+};
+
+function addWorkEntry() {
+  const text = workText.value.trim();
+  if (!text) { workText.focus(); return; }
+  if (!workDate.value || !workStart.value || !workEnd.value) { alert('Заполни дату, начало и конец'); return; }
+  const startTs = new Date(`${workDate.value}T${workStart.value}`).getTime();
+  let endTs = new Date(`${workDate.value}T${workEnd.value}`).getTime();
+  if (endTs < startTs) endTs += 24*3600*1000;
+  workLog.push({ id: Date.now()+Math.random(), text,
+    date: workDate.value, start: workStart.value, end: workEnd.value, startTs, endTs, created: Date.now() });
+  save(); workText.value=''; workText.focus(); renderWork();
+}
+document.getElementById('addWorkBtn').onclick = addWorkEntry;
+workText.addEventListener('keydown', e => { if (e.key === 'Enter') addWorkEntry(); });
+
+document.querySelectorAll('.filters button[data-tfilter]').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.filters button[data-tfilter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); timeFilter = btn.dataset.tfilter; renderWork();
+  };
+});
+function getFilteredWork() {
+  let arr = [...workLog];
+  if (timeFilter === 'today') arr = arr.filter(w => w.date === todayInput());
+  else if (timeFilter === 'week') {
+    const wa = new Date(); wa.setDate(wa.getDate()-7); wa.setHours(0,0,0,0);
+    arr = arr.filter(w => w.startTs >= wa.getTime());
+  }
+  return arr;
+}
+
+/* ---- Расчёт неучтённых интервалов в рабочем окне ---- */
+function calcUnaccountedGaps(items, dateStr) {
+  const dayItems = items.filter(w => w.date === dateStr)
+    .map(w => [w.startTs, w.endTs || Date.now()])
+    .sort((a, b) => a[0] - b[0]);
+
+  const merged = [];
+  dayItems.forEach(([s, e]) => {
+    if (merged.length === 0) { merged.push([s, e]); return; }
+    const last = merged[merged.length - 1];
+    if (s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  });
+
+  const wStart = new Date(dateStr + 'T00:00:00');
+  wStart.setHours(WORK_WINDOW_START, 0, 0, 0);
+  const wEnd = new Date(dateStr + 'T00:00:00');
+  wEnd.setHours(WORK_WINDOW_END, 0, 0, 0);
+  const wStartTs = wStart.getTime();
+  const wEndTs = wEnd.getTime();
+
+  const clipped = [];
+  merged.forEach(([s, e]) => {
+    const cs = Math.max(s, wStartTs);
+    const ce = Math.min(e, wEndTs);
+    if (cs < ce) clipped.push([cs, ce]);
+  });
+
+  const gaps = [];
+  let cursor = wStartTs;
+  clipped.forEach(([s, e]) => {
+    if (s > cursor) gaps.push([cursor, s]);
+    cursor = Math.max(cursor, e);
+  });
+  if (cursor < wEndTs) gaps.push([cursor, wEndTs]);
+
+  return gaps;
+}
+
+/* ---- Модалка добавления действия в интервал ---- */
+function openGapEditor(startTs, endTs) {
+  const d1 = new Date(startTs);
+  const dateStr = `${d1.getFullYear()}-${pad(d1.getMonth()+1)}-${pad(d1.getDate())}`;
+  const startTime = `${pad(d1.getHours())}:${pad(d1.getMinutes())}`;
+  const d2 = new Date(endTs);
+  const endTime = `${pad(d2.getHours())}:${pad(d2.getMinutes())}`;
+  const durMs = endTs - startTs;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:440px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:6px;font-size:16px">➕ Добавить действие в интервал</h3>
+    <div style="font-size:12px;color:#a1a1aa;margin-bottom:14px">
+      Интервал: <b style="color:#fbbf24">${formatTimeShort(startTs)} – ${formatTimeShort(endTs)}</b> (${fmtDurShort(durMs)})
+    </div>
+
+    <label style="font-size:12px;color:#a1a1aa">Чем занимался?</label>
+    <input type="text" id="gapText" placeholder="Например: обед, совещание, дорога..."
+      style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;font-size:14px">
+
+    <label style="font-size:12px;color:#a1a1aa">📅 Дата</label>
+    <input type="date" id="gapDate" value="${dateStr}"
+      style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+
+    <div style="display:flex;gap:8px">
+      <div style="flex:1">
+        <label style="font-size:12px;color:#a1a1aa">🟢 Начало</label>
+        <input type="time" id="gapStart" value="${startTime}"
+          style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:12px;color:#a1a1aa">🔴 Конец</label>
+        <input type="time" id="gapEnd" value="${endTime}"
+          style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:#71717a;margin-bottom:12px">
+      ⓘ Можно изменить начало/конец — например, если обед занял только часть интервала.
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="gapCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
+      <button id="gapSave" style="background:#22c55e;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:500">✓ Добавить</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+
+  const inp = wrap.querySelector('#gapText');
+  inp.focus();
+
+  const doSave = () => {
+    const text = inp.value.trim();
+    if (!text) { inp.focus(); alert('Впиши, чем занимался'); return; }
+    const gd = wrap.querySelector('#gapDate').value;
+    const gs = wrap.querySelector('#gapStart').value;
+    const ge = wrap.querySelector('#gapEnd').value;
+    if (!gd || !gs || !ge) { alert('Заполни дату, начало и конец'); return; }
+
+    const newStartTs = new Date(`${gd}T${gs}`).getTime();
+    let newEndTs = new Date(`${gd}T${ge}`).getTime();
+    if (newEndTs <= newStartTs) newEndTs += 24*3600*1000;
+    if (newEndTs <= newStartTs) { alert('Конец должен быть позже начала'); return; }
+
+    workLog.push({
+      id: Date.now() + Math.random(),
+      text,
+      date: gd,
+      start: gs,
+      end: ge,
+      startTs: newStartTs,
+      endTs: newEndTs,
+      created: Date.now()
+    });
+    save();
+    renderWork();
+    wrap.remove();
+  };
+
+  wrap.querySelector('#gapCancel').onclick = () => wrap.remove();
+  wrap.querySelector('#gapSave').onclick = doSave;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') doSave(); });
+}
+
+/* ============================================================
+   СРЕЗ ДНЯ
+============================================================ */
+function getPulseForDate(dateStr) {
+  if (!dailyPulse[dateStr]) dailyPulse[dateStr] = [];
+  return dailyPulse[dateStr];
+}
+
+function calcPulseTotals(items) {
+  let planSum = 0, factSum = 0;
+  let hasPlan = false, hasFact = false;
+  items.forEach(it => {
+    const p = parseFloat(String(it.plan || '').replace(',', '.'));
+    if (!isNaN(p)) { planSum += p; hasPlan = true; }
+    const f = parseFloat(String(it.fact || '').replace(',', '.'));
+    if (!isNaN(f)) { factSum += f; hasFact = true; }
+  });
+  return { planSum, factSum, hasPlan, hasFact };
+}
+
+function renderPulse() {
+  const list = document.getElementById('pulseList');
+  const hint = document.getElementById('pulseHint');
+  const label = document.getElementById('pulseDateLabel');
+  if (!list) return;
+
+  const dateStr = todayInput();
+  const items = getPulseForDate(dateStr);
+
+  if (label) {
+    const d = new Date(dateStr + 'T00:00:00');
+    label.textContent = '— ' + d.toLocaleDateString('ru-RU', { day:'numeric', month:'long' });
+  }
+
+  list.innerHTML = '';
+  if (items.length === 0) {
+    if (hint) hint.style.display = 'block';
+    return;
+  }
+  if (hint) hint.style.display = 'none';
+
+  items.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'pulse-row';
+
+    const lbl = document.createElement('input');
+    lbl.type = 'text';
+    lbl.className = 'pulse-label';
+    lbl.value = item.label || '';
+    lbl.placeholder = 'Название (например: Прогноз)';
+    lbl.oninput = () => {
+      item.label = lbl.value;
+      save();
+    };
+
+    const plan = document.createElement('input');
+    plan.type = 'text';
+    plan.className = 'pulse-plan';
+    plan.value = item.plan || '';
+    plan.placeholder = 'план';
+    plan.title = 'План';
+    plan.oninput = () => {
+      item.plan = plan.value;
+      save();
+    };
+
+    const sep = document.createElement('span');
+    sep.className = 'pulse-sep';
+    sep.textContent = '/';
+
+    const fact = document.createElement('input');
+    fact.type = 'text';
+    fact.className = 'pulse-fact';
+    fact.value = item.fact || '';
+    fact.placeholder = 'факт';
+    fact.title = 'Факт';
+    fact.oninput = () => {
+      item.fact = fact.value;
+      save();
+    };
+
+    const del = document.createElement('button');
+    del.className = 'pulse-del';
+    del.textContent = '🗑';
+    del.title = 'Удалить поле';
+    del.onclick = () => {
+      if (!confirm('Удалить поле «' + (item.label || '(без названия)') + '»?')) return;
+      const ds = todayInput();
+      dailyPulse[ds].splice(idx, 1);
+      save();
+      renderPulse();
+    };
+
+    row.appendChild(lbl);
+    row.appendChild(plan);
+    row.appendChild(sep);
+    row.appendChild(fact);
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('pulseAddBtn').onclick = () => {
+  const dateStr = todayInput();
+  if (!dailyPulse[dateStr]) dailyPulse[dateStr] = [];
+  dailyPulse[dateStr].push({ label: '', plan: '', fact: '' });
+  save();
+  renderPulse();
+  setTimeout(() => {
+    const rows = document.querySelectorAll('#pulseList .pulse-row');
+    const last = rows[rows.length - 1];
+    if (last) {
+      const inp = last.querySelector('.pulse-label');
+      if (inp) inp.focus();
+    }
+  }, 50);
+};
+
+document.getElementById('pulseCopyBtn').onclick = async () => {
+  const dateStr = todayInput();
+  const items = getPulseForDate(dateStr);
+  if (items.length === 0) {
+    alert('Срез пуст — добавь хотя бы одно поле');
+    return;
+  }
+  const text = items
+    .filter(it => it.label || it.plan || it.fact)
+    .map(it => {
+      const plan = it.plan || '0';
+      const fact = it.fact || '0';
+      return `${it.label} ${plan}/${fact}`.trim();
+    })
+    .join('\n');
+
+  const btn = document.getElementById('pulseCopyBtn');
+  const orig = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = '✓ Скопировано';
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✓ Скопировано';
+  }
+  setTimeout(() => { btn.textContent = orig; }, 1500);
+};
+
+function renderWork() {
+  if (!timeList || !timeSummary) return;
+  const items = getFilteredWork().sort((a,b) => b.startTs - a.startTs);
+  const totalMs = items.reduce((s, w) => s + ((w.endTs || Date.now()) - w.startTs), 0);
+
+  const targetMs = WORK_DAY_HOURS * 3600000;
+  const pct = targetMs > 0 ? Math.round(totalMs / targetMs * 100) : 0;
+  const diffMs = totalMs - targetMs;
+  const pctClass = pct >= 100 ? 'green' : pct >= 50 ? '' : 'orange';
+
+  let gapsHtml = '';
+  let gapsTotalMs = 0;
+  let allGaps = [];
+
+  const datesSet = new Set(items.map(w => w.date));
+  if (timeFilter === 'today') datesSet.add(todayInput());
+
+  if (datesSet.size > 0 && datesSet.size <= 31) {
+    allGaps = [];
+    [...datesSet].sort().forEach(dateStr => {
+      const gaps = calcUnaccountedGaps(items, dateStr);
+      gaps.forEach(([s, e]) => {
+        gapsTotalMs += (e - s);
+        allGaps.push({ dateStr, s, e });
+      });
+    });
+
+    if (allGaps.length > 0) {
+      const preview = allGaps.map((g, i) => {
+        const d = new Date(g.s);
+        const dateOnly = (timeFilter === 'week' || timeFilter === 'all')
+          ? `${pad(d.getDate())}.${pad(d.getMonth()+1)} ` : '';
+        return `<div class="gap-line" data-gap-i="${i}" style="font-size:12px;color:#fbbf24;line-height:1.6;padding:4px 6px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onmouseover="this.style.background='#2a2a3c'" onmouseout="this.style.background='transparent'">
+          <span>${dateOnly}${formatTimeShort(g.s)} – ${formatTimeShort(g.e)} <span style="color:#71717a">(${fmtDurShort(g.e - g.s)})</span></span>
+          <span style="color:#6366f1;font-weight:bold">＋</span>
+        </div>`;
+      }).join('');
+
+      gapsHtml = `
+        <div style="flex-basis:100%;background:#1e1e2e;padding:10px 12px;border-radius:8px;border-left:3px solid #f59e0b;margin-top:6px">
+          <div style="font-size:12px;color:#a1a1aa;margin-bottom:6px">
+            ⚠️ Не учтено: <b style="color:#fbbf24">${fmtDur(gapsTotalMs)}</b>
+            (${allGaps.length} ${plural(allGaps.length,'интервал','интервала','интервалов')})
+            <span style="color:#6366f1;font-size:11px;margin-left:6px">— кликни, чтобы добавить действие</span>
+          </div>
+          <div class="gaps-scroll" style="max-height:220px;overflow-y:auto;padding-right:4px">
+            ${preview}
+          </div>
+        </div>
+      `;
+    } else if (items.length > 0) {
+      gapsHtml = `
+        <div style="flex-basis:100%;background:#052e16;padding:10px 12px;border-radius:8px;border-left:3px solid #22c55e;margin-top:6px;font-size:12px;color:#6ee7b7">
+          ✓ В рабочем окне ${WORK_WINDOW_START}:00–${WORK_WINDOW_END}:00 пробелов нет — всё покрыто записями
+        </div>
+      `;
+    }
+  }
+
+  const hours = WORK_DAY_HOURS;
+  timeSummary.innerHTML = `
+    <div class="info">
+      <div class="lbl">Отработано / ${hours}ч</div>
+      <div class="big ${pctClass}">${fmtDur(totalMs)} <span style="font-size:14px;color:#a1a1aa">(${pct}%)</span></div>
+    </div>
+    <div class="info">
+      <div class="lbl">${diffMs >= 0 ? 'Переработка' : 'Осталось'}</div>
+      <div class="big ${diffMs >= 0 ? 'green' : 'orange'}">${fmtDur(Math.abs(diffMs))}</div>
+    </div>
+    <div class="info">
+      <div class="lbl">Записей</div>
+      <div class="big">${items.length}</div>
+    </div>
+    ${gapsHtml}
+  `;
+
+  timeSummary.querySelectorAll('.gap-line').forEach(el => {
+    el.onclick = () => {
+      const i = parseInt(el.dataset.gapI);
+      const g = allGaps[i];
+      if (g) openGapEditor(g.s, g.e);
+    };
+  });
+
+  timeList.innerHTML = '';
+  if (items.length === 0) { timeList.innerHTML = '<div class="empty">Нет записей</div>'; return; }
+  const byDate = {};
+  items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
+  Object.keys(byDate).sort().reverse().forEach(dateStr => {
+    const dayItems = byDate[dateStr].sort((a,b) => a.startTs - b.startTs);
+    const dayTotal = dayItems.reduce((s, w) => s + ((w.endTs || Date.now()) - w.startTs), 0);
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayLabel = isSameDay(d, new Date()) ? 'Сегодня' :
+                     isSameDay(d, new Date(Date.now()-86400000)) ? 'Вчера' : formatDate(d).split(' ')[0];
+    const isToday = isSameDay(d, new Date());
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'time-day' + (isToday ? '' : ' collapsed');
+    const header = document.createElement('div');
+    header.className = 'time-day-header';
+
+    const dayPct = Math.round(dayTotal / targetMs * 100);
+    const dayPctColor = dayPct >= 100 ? '#22c55e' : dayPct >= 50 ? '#6ee7b7' : '#fbbf24';
+
+    header.innerHTML = `<span class="day-title">${dayLabel} <span class="arrow">▼</span></span>
+      <span class="day-total">${fmtDur(dayTotal)} <span style="color:${dayPctColor};font-weight:normal">(${dayPct}%)</span> · ${dayItems.length} ${plural(dayItems.length,'запись','записи','записей')}</span>`;
+    header.onclick = () => dayDiv.classList.toggle('collapsed');
+    dayDiv.appendChild(header);
+    const body = document.createElement('div'); body.className = 'time-day-body';
+    dayItems.forEach(w => body.appendChild(renderWorkRow(w, false)));
+
+    dayDiv.appendChild(body);
+    timeList.appendChild(dayDiv);
+  });
+}
+
+function renderWorkRow(w, isEmp, empName) {
+  const live = !w.endTs;
+  const dur = (w.endTs || Date.now()) - w.startTs;
+  const row = document.createElement('div');
+  const isSync = !isEmp && w.syncEmployeeId;
+  row.className = 'time-entry' + (isEmp ? ' emp' : '') + (isSync ? ' sync' : '');
+  const c = document.createElement('div'); c.className = 't-content';
+  const txt = document.createElement('div');
+  txt.className = 't-text'; txt.contentEditable = 'true'; txt.textContent = w.text;
+  txt.onblur = () => { const v = txt.textContent.trim();
+    if (v && v !== w.text) { w.text = v; save(); } else txt.textContent = w.text; };
+  txt.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); txt.blur(); } };
+  c.appendChild(txt);
+  const meta = document.createElement('div'); meta.className = 't-meta';
+  const durH = dur/3600000;
+  const durClass = durH > 8 ? 't-dur long' : 't-dur';
+  let metaHtml = '';
+  if (isEmp && empName) metaHtml += `<span class="t-emp">👤 ${empName}</span>`;
+  if (isSync) {
+    const empSync = employees.find(e => e.id === w.syncEmployeeId);
+    const nameSync = empSync ? empSync.name : (w.syncEmployeeName || 'КМ');
+    metaHtml += `<span class="t-sync">🤝 Синхрон с ${nameSync}</span>`;
+  }
+  const endStr = live ? '— идёт' : w.end;
+  metaHtml += `<span class="t-time">🕐 ${w.start} – ${endStr}</span>
+    <span class="${durClass}">⏱ ${fmtDurShort(dur)}${live ? ' (live)' : ''}</span>`;
+  meta.innerHTML = metaHtml;
+  c.appendChild(meta);
+  const actions = document.createElement('div'); actions.className = 'actions';
+  if (!live && !isEmp) {
+    const edit = document.createElement('button'); edit.textContent = '📝';
+    edit.onclick = () => editWorkEntry(w.id);
+    actions.appendChild(edit);
+  }
+  const del = document.createElement('button'); del.className = 'danger'; del.textContent = '🗑';
+  del.onclick = () => {
+    if (!confirm(live ? 'Идёт запись — удалить её?' : 'Удалить запись?')) return;
+    if (isEmp) {
+      empWorkLog = empWorkLog.filter(x => x.id !== w.id);
+      save(); renderTeam();
+    } else {
+      workLog = workLog.filter(x => x.id !== w.id);
+      save(); renderWork();
+    }
+  };
+  actions.appendChild(del);
+  row.appendChild(c); row.appendChild(actions);
+  return row;
+}
+function editWorkEntry(id) {
+  const w = workLog.find(x => x.id === id); if (!w) return;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:460px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">Редактировать запись</h3>
+    <label style="font-size:13px;color:#a1a1aa">Суть работы</label>
+    <input type="text" id="ewText" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px">
+    <label style="font-size:13px;color:#a1a1aa">📅 Дата</label>
+    <input type="date" id="ewDate" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
+    <div style="display:flex;gap:8px">
+      <div style="flex:1"><label style="font-size:13px;color:#a1a1aa">🟢 Начало</label>
+        <input type="time" id="ewStart" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark"></div>
+      <div style="flex:1"><label style="font-size:13px;color:#a1a1aa">🔴 Конец</label>
+        <input type="time" id="ewEnd" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="ewCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
+      <button id="ewSave" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Сохранить</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('#ewText').value = w.text;
+  wrap.querySelector('#ewDate').value = w.date;
+  wrap.querySelector('#ewStart').value = w.start;
+  wrap.querySelector('#ewEnd').value = w.end;
+  wrap.querySelector('#ewCancel').onclick = () => wrap.remove();
+  wrap.querySelector('#ewSave').onclick = () => {
+    const newStart = new Date(`${wrap.querySelector('#ewDate').value}T${wrap.querySelector('#ewStart').value}`).getTime();
+    let newEnd = new Date(`${wrap.querySelector('#ewDate').value}T${wrap.querySelector('#ewEnd').value}`).getTime();
+    if (newEnd < newStart) newEnd += 24*3600*1000;
+    w.text = wrap.querySelector('#ewText').value.trim() || w.text;
+    w.date = wrap.querySelector('#ewDate').value;
+    w.start = wrap.querySelector('#ewStart').value;
+    w.end = wrap.querySelector('#ewEnd').value;
+    w.startTs = newStart; w.endTs = newEnd;
+    save(); renderWork(); wrap.remove();
+  };
+}
+document.getElementById('reportBtn').onclick = () => {
+  const items = getFilteredWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
+  if (!items.length) { alert('Нет завершённых записей'); return; }
+  const period = timeFilter === 'today' ? 'Сегодня ' + todayInput()
+               : timeFilter === 'week' ? 'Последние 7 дней' : 'Все записи';
+  let report = `📋 ОТЧЁТ О РАБОТЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
+  const byDate = {};
+  items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
+  let grand = 0;
+  Object.keys(byDate).sort().forEach(dateStr => {
+    const dayItems = byDate[dateStr];
+    const dayTotal = dayItems.reduce((s,w) => s + (w.endTs - w.startTs), 0);
+    grand += dayTotal;
+    const d = new Date(dateStr + 'T00:00:00');
+    report += `📅 ${d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}  —  ${fmtDur(dayTotal)}\n${'-'.repeat(40)}\n`;
+    dayItems.forEach((w,i) => {
+      const dur = fmtDurShort(w.endTs - w.startTs);
+      const syncTag = w.syncEmployeeId ? `  🤝 синхрон с ${(employees.find(e=>e.id===w.syncEmployeeId)||{}).name || w.syncEmployeeName || 'КМ'}` : '';
+      report += `${i+1}. ${w.start}–${w.end} (${dur})${syncTag}\n   ${w.text}\n`;
+    });
+    report += '\n';
+  });
+  report += `${'='.repeat(40)}\nИТОГО: ${fmtDur(grand)} за ${Object.keys(byDate).length} ${plural(Object.keys(byDate).length,'день','дня','дней')}\nЗаписей: ${items.length}\n`;
+  showReportModal(report, `work-report-${todayInput()}.txt`);
+};
+function showReportModal(report, filename) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:700px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">📤 Отчёт готов</h3>
+    <textarea id="reportText" style="width:100%;height:360px;padding:12px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;font-family:ui-monospace,monospace;font-size:13px;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+      <button id="rClose" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Закрыть</button>
+      <button id="rDl" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">💾 Скачать .txt</button>
+      <button id="rCopy" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:bold">📋 Копировать</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const ta = wrap.querySelector('#reportText');
+  ta.value = report;
+  wrap.querySelector('#rClose').onclick = () => wrap.remove();
+  wrap.querySelector('#rDl').onclick = () => {
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  wrap.querySelector('#rCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(report);
+      wrap.querySelector('#rCopy').textContent = '✓ Скопировано';
+      setTimeout(() => wrap.querySelector('#rCopy').textContent = '📋 Копировать', 1500);
+    } catch(e) { ta.select(); document.execCommand('copy'); }
+  };
+}
+
+/* ============================================================
+   СОТРУДНИКИ — сессия с КМ
+============================================================ */
+const empActiveSelect = document.getElementById('empActiveSelect');
+const sessionTopicInput = document.getElementById('sessionTopic');
+const empList = document.getElementById('empList');
+const empSummary = document.getElementById('empSummary');
+const empTimerBox = document.getElementById('empTimerBox');
+const empTimerLabel = document.getElementById('empTimerLabel');
+const empTimerDisplayEl = document.getElementById('empTimerDisplay');
+const empTimerTaskEl = document.getElementById('empTimerTask');
+const empTimerWhoEl = document.getElementById('empTimerWho');
+const empTimerStartBtn = document.getElementById('empTimerStartBtn');
+const empTimerStopBtn = document.getElementById('empTimerStopBtn');
+const sessionInfoEl = document.getElementById('sessionInfo');
+const callsPanel = document.getElementById('callsPanel');
+const liveNumEl = document.getElementById('liveNum');
+const liveTimerEl = document.getElementById('liveTimer');
+const markOkBtn = document.getElementById('markOkBtn');
+const markFailBtn = document.getElementById('markFailBtn');
+const liveOSInput = document.getElementById('liveOS');
+const callStartBtn = document.getElementById('callStartBtn');
+const callEndBtn = document.getElementById('callEndBtn');
+const callsListEl = document.getElementById('callsList');
+const callsCountLabel = document.getElementById('callsCountLabel');
+const sessionNotesEl = document.getElementById('sessionNotes');
+
+empActiveSelect.addEventListener('change', () => {
+  const v = empActiveSelect.value;
+  activeEmpCard = v ? parseFloat(v) : null;
+  updateTopButtons();
+});
+
+function refreshEmpActiveSelect() {
+  const cur = empActiveSelect.value;
+  empActiveSelect.innerHTML = '<option value="">— выбери КМ —</option>';
+  employees.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e.id;
+    o.textContent = e.name;
+    empActiveSelect.appendChild(o);
+  });
+  if (activeEmpCard && employees.some(e => e.id === activeEmpCard)) {
+    empActiveSelect.value = activeEmpCard;
+  } else if (cur && employees.some(e => String(e.id) === cur)) {
+    empActiveSelect.value = cur;
+  } else {
+    empActiveSelect.value = '';
+    activeEmpCard = null;
+  }
+  updateTopButtons();
+}
+
+function updateEmpTimerDisplay() {
+  if (!empTimerDisplayEl) return;
+  if (activeEmpTimer) {
+    const elapsed = Date.now() - activeEmpTimer.startTs;
+    empTimerDisplayEl.textContent = fmtHMS(elapsed);
+    empTimerDisplayEl.classList.add('running');
+    empTimerLabel.textContent = '🎧 Сессия с КМ идёт';
+    empTimerBox.classList.add('session');
+    empTimerTaskEl.textContent = activeEmpTimer.text || '';
+    const emp = employees.find(e => e.id === activeEmpTimer.employeeId);
+    empTimerWhoEl.textContent = '👤 ' + (emp ? emp.name : '(КМ удалён)') + '  •  🤝 синхрон с моим таймером';
+
+    const callsCount = activeEmpTimer.calls.length;
+    const okCount = activeEmpTimer.calls.filter(c => c.mark === 'ok').length;
+    const failCount = activeEmpTimer.calls.filter(c => c.mark === 'fail').length;
+    const totalCallMs = activeEmpTimer.calls.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+    sessionInfoEl.style.display = 'flex';
+    sessionInfoEl.innerHTML = `
+      <div class="stat-item">📞 <span class="v">${callsCount}</span> звонков</div>
+      <div class="stat-item">✅ <span class="v">${okCount}</span></div>
+      <div class="stat-item">❌ <span class="v">${failCount}</span></div>
+      <div class="stat-item">⏱ в звонках: <span class="v">${fmtDurCall(totalCallMs)}</span></div>
+    `;
+
+    empTimerStartBtn.style.display = 'none';
+    empTimerStopBtn.style.display = 'inline-block';
+  } else {
+    empTimerDisplayEl.textContent = '00:00:00';
+    empTimerDisplayEl.classList.remove('running');
+    empTimerLabel.textContent = 'Сессия с КМ';
+    empTimerBox.classList.remove('session');
+    empTimerTaskEl.textContent = '— не запущена —';
+    empTimerWhoEl.textContent = '';
+    empTimerStartBtn.style.display = 'inline-block';
+    empTimerStopBtn.style.display = 'none';
+    sessionInfoEl.style.display = 'none';
+  }
+  updateTimerLocks();
+  updateCallsPanelVisibility();
+}
+
+function updateCallsPanelVisibility() {
+  const isSession = activeEmpTimer && activeEmpTimer.mode === 'session';
+  callsPanel.classList.toggle('show', !!isSession);
+  if (isSession) {
+    renderLiveRow();
+    renderCallsList();
+    sessionNotesEl.value = activeEmpTimer.notes || '';
+  }
+}
+
+function renderLiveRow() {
+  if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
+  if (activeEmpTimer.currentCall) {
+    liveNumEl.textContent = 'Звонок #' + (activeEmpTimer.calls.length + 1);
+    liveNumEl.style.color = '#4ade80';
+    const dur = Date.now() - activeEmpTimer.currentCall.startTs;
+    liveTimerEl.textContent = fmtDurCall(dur);
+    callStartBtn.style.display = 'none';
+    callEndBtn.style.display = 'inline-block';
+  } else {
+    liveNumEl.textContent = '— нет звонка —';
+    liveNumEl.style.color = '#4ade80';
+    liveTimerEl.textContent = '';
+    callStartBtn.style.display = 'inline-block';
+    callEndBtn.style.display = 'none';
+  }
+  liveOSInput.value = currentDraft.os;
+  markOkBtn.classList.toggle('active-ok', currentDraft.mark === 'ok');
+  markFailBtn.classList.toggle('active-fail', currentDraft.mark === 'fail');
+}
+
+markOkBtn.onclick = () => {
+  currentDraft.mark = currentDraft.mark === 'ok' ? null : 'ok';
+  renderLiveRow();
+};
+markFailBtn.onclick = () => {
+  currentDraft.mark = currentDraft.mark === 'fail' ? null : 'fail';
+  renderLiveRow();
+};
+liveOSInput.addEventListener('input', () => {
+  currentDraft.os = liveOSInput.value;
+});
+
+function renderCallsList() {
+  if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
+  callsListEl.innerHTML = '';
+  const calls = activeEmpTimer.calls;
+  callsCountLabel.textContent = calls.length ? `всего: ${calls.length}` : '';
+  if (calls.length === 0) {
+    callsListEl.innerHTML = '<div class="empty" style="padding:16px 0;font-size:13px">Пока нет завершённых звонков</div>';
+    return;
+  }
+  calls.forEach((call, idx) => {
+    const item = document.createElement('div');
+    const markCls = call.mark === 'ok' ? 'mark-ok' : call.mark === 'fail' ? 'mark-fail' : '';
+    item.className = 'call-line ' + markCls;
+
+    const num = document.createElement('span');
+    num.className = 'cl-num';
+    num.textContent = '#' + (idx + 1);
+
+    const time = document.createElement('span');
+    time.className = 'cl-time';
+    time.textContent = `${formatTimeShort(call.startTs)}–${formatTimeShort(call.endTs)}`;
+
+    const dur = document.createElement('span');
+    dur.className = 'cl-dur';
+    dur.textContent = fmtDurCall(call.endTs - call.startTs);
+
+    const mark = document.createElement('span');
+    mark.className = 'cl-mark';
+    mark.textContent = call.mark === 'ok' ? '✅' : call.mark === 'fail' ? '❌' : '⚪';
+
+    const os = document.createElement('span');
+    os.className = 'cl-os' + (call.os ? '' : ' empty');
+    os.textContent = call.os || '(нет ОС)';
+    os.title = 'Клик — редактировать';
+    os.onclick = () => editCallOS(idx);
+
+    const actions = document.createElement('div');
+    actions.className = 'cl-actions';
+    const editBtn = document.createElement('button');
+    editBtn.textContent = '✏️';
+    editBtn.onclick = () => editCallOS(idx);
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑';
+    delBtn.onclick = () => {
+      if (confirm('Удалить звонок #' + (idx+1) + '?')) {
+        activeEmpTimer.calls.splice(idx, 1);
+        save();
+        renderCallsList();
+        updateEmpTimerDisplay();
+      }
+    };
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    item.appendChild(num);
+    item.appendChild(time);
+    item.appendChild(dur);
+    item.appendChild(mark);
+    item.appendChild(os);
+    item.appendChild(actions);
+    callsListEl.appendChild(item);
+  });
+}
+
+function editCallOS(idx) {
+  if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
+  const call = activeEmpTimer.calls[idx];
+  if (!call) return;
+  const v = prompt('ОС по звонку #' + (idx+1) + ':', call.os || '');
+  if (v === null) return;
+  call.os = v.trim();
+  save();
+  renderCallsList();
+}
+
+empTimerStartBtn.onclick = () => {
+  if (activeTimer && !activeTimer.syncEmployeeId) {
+    alert('⏸ Сейчас идёт твой таймер.\n\nСначала останови его.');
+    return;
+  }
+  if (activeEmpTimer) return;
+  const topic = sessionTopicInput.value.trim();
+  if (!topic) { alert('Впиши тему сессии'); sessionTopicInput.focus(); return; }
+  const empId = empActiveSelect.value;
+  if (!empId) { alert('Выбери КМ из списка сверху'); return; }
+  const emp = employees.find(e => e.id === parseFloat(empId));
+  const startTs = Date.now();
+  const d = new Date(startTs);
+  const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const startTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const empLogId = Date.now() + Math.random();
+  empWorkLog.push({
+    id: empLogId,
+    employeeId: parseFloat(empId),
+    text: topic,
+    date: dateStr, start: startTime, end: null,
+    startTs, endTs: null, created: Date.now()
+  });
+
+  const myLogId = Date.now() + Math.random();
+  workLog.push({
+    id: myLogId,
+    text: `🤝 Работа с ${emp ? emp.name : 'КМ'}: ${topic}`,
+    date: dateStr, start: startTime, end: null,
+    startTs, endTs: null, created: Date.now(),
+    syncEmployeeId: parseFloat(empId),
+    syncEmployeeName: emp ? emp.name : null
+  });
+
+  activeEmpTimer = {
+    text: topic,
+    startTs,
+    employeeId: parseFloat(empId),
+    mode: 'session',
+    calls: [],
+    currentCall: null,
+    notes: '',
+    logId: empLogId,
+    myLogId: myLogId
+  };
+
+  currentDraft = { mark: null, os: '' };
+
+  save();
+  sessionTopicInput.value = '';
+  updateEmpTimerDisplay();
+  if (empTimerTickId) clearInterval(empTimerTickId);
+  empTimerTickId = setInterval(updateEmpTimerDisplay, 1000);
+  renderWork();
+  renderTeam();
+};
+
+empTimerStopBtn.onclick = () => {
+  if (!activeEmpTimer) return;
+  if (activeEmpTimer.mode === 'session' && activeEmpTimer.currentCall) {
+    if (!confirm('Есть незакрытый звонок. Завершить его и закрыть сессию?')) return;
+    const call = activeEmpTimer.currentCall;
+    call.endTs = Date.now();
+    call.mark = currentDraft.mark;
+    call.os = currentDraft.os.trim();
+    activeEmpTimer.calls.push(call);
+    activeEmpTimer.currentCall = null;
+    if (callTickId) clearInterval(callTickId);
+  }
+  const endTs = Date.now();
+  const d = new Date(endTs);
+
+  const empRec = empWorkLog.find(w => w.id === activeEmpTimer.logId);
+  if (empRec) { empRec.endTs = endTs; empRec.end = `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+
+  const myRec = workLog.find(w => w.id === activeEmpTimer.myLogId);
+  if (myRec) { myRec.endTs = endTs; myRec.end = `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+
+  let savedSession = null;
+  if (activeEmpTimer.mode === 'session') {
+    savedSession = {
+      id: Date.now() + Math.random(),
+      employeeId: activeEmpTimer.employeeId,
+      topic: activeEmpTimer.text,
+      startTs: activeEmpTimer.startTs,
+      endTs,
+      calls: activeEmpTimer.calls,
+      notes: activeEmpTimer.notes || ''
+    };
+    sessions.push(savedSession);
+  }
+
+  activeEmpTimer = null;
+  currentDraft = { mark: null, os: '' };
+  save();
+  if (empTimerTickId) clearInterval(empTimerTickId);
+  if (callTickId) clearInterval(callTickId);
+  updateEmpTimerDisplay();
+  renderWork();
+  renderTeam();
+  renderSessionsHistory();
+
+  if (savedSession) {
+    setTimeout(() => showSessionReport(savedSession), 100);
+  }
+};
+
+callStartBtn.onclick = () => {
+  if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
+  if (activeEmpTimer.currentCall) return;
+  activeEmpTimer.currentCall = { startTs: Date.now(), endTs: null };
+  save();
+  renderLiveRow();
+  if (callTickId) clearInterval(callTickId);
+  callTickId = setInterval(() => {
+    if (!activeEmpTimer || !activeEmpTimer.currentCall) { clearInterval(callTickId); return; }
+    const dur = Date.now() - activeEmpTimer.currentCall.startTs;
+    liveTimerEl.textContent = fmtDurCall(dur);
+  }, 1000);
+};
+
+callEndBtn.onclick = () => {
+  if (!activeEmpTimer || !activeEmpTimer.currentCall) return;
+  const call = activeEmpTimer.currentCall;
+  call.endTs = Date.now();
+  call.mark = currentDraft.mark;
+  call.os = currentDraft.os.trim();
+  activeEmpTimer.calls.push(call);
+  activeEmpTimer.currentCall = null;
+  if (callTickId) clearInterval(callTickId);
+  currentDraft = { mark: null, os: '' };
+  save();
+  renderLiveRow();
+  renderCallsList();
+  updateEmpTimerDisplay();
+};
+
+sessionNotesEl.addEventListener('input', () => {
+  if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
+  activeEmpTimer.notes = sessionNotesEl.value;
+  save();
+});
+
+if (activeEmpTimer) {
+  empTimerTickId = setInterval(updateEmpTimerDisplay, 1000);
+  if (activeEmpTimer.mode === 'session' && activeEmpTimer.currentCall) {
+    callTickId = setInterval(() => {
+      if (!activeEmpTimer || !activeEmpTimer.currentCall) { clearInterval(callTickId); return; }
+      const dur = Date.now() - activeEmpTimer.currentCall.startTs;
+      liveTimerEl.textContent = fmtDurCall(dur);
+    }, 1000);
+  }
+}
+updateEmpTimerDisplay();
+
+function getFilteredEmpWork() {
+  let arr = [...empWorkLog];
+  if (empTimeFilter === 'today') arr = arr.filter(w => w.date === todayInput());
+  else if (empTimeFilter === 'week') {
+    const wa = new Date(); wa.setDate(wa.getDate()-7); wa.setHours(0,0,0,0);
+    arr = arr.filter(w => w.startTs >= wa.getTime());
+  }
+  if (activeEmpFilter !== null) arr = arr.filter(w => w.employeeId === activeEmpFilter);
+  return arr;
+}
+function renderTeam() {
+  if (!empActiveSelect) return;
+  refreshEmpActiveSelect();
+  const items = getFilteredEmpWork().sort((a,b) => b.startTs - a.startTs);
+  const totalMs = items.reduce((s, w) => s + ((w.endTs || Date.now()) - w.startTs), 0);
+  empSummary.innerHTML = `
+    <div class="info"><div class="lbl">Всего с КМ</div><div class="big">${fmtDur(totalMs)}</div></div>
+    <div class="info"><div class="lbl">Записей</div><div class="big">${items.length}</div></div>
+    <div class="info"><div class="lbl">КМ</div><div class="big">${employees.length}</div></div>
+  `;
+  empList.innerHTML = '';
+  if (items.length === 0) { empList.innerHTML = '<div class="empty">Нет записей</div>'; return; }
+  const byDate = {};
+  items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
+  Object.keys(byDate).sort().reverse().forEach(dateStr => {
+    const dayItems = byDate[dateStr].sort((a,b) => a.startTs - b.startTs);
+    const dayTotal = dayItems.reduce((s, w) => s + ((w.endTs || Date.now()) - w.startTs), 0);
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayLabel = isSameDay(d, new Date()) ? 'Сегодня' :
+                     isSameDay(d, new Date(Date.now()-86400000)) ? 'Вчера' : formatDate(d).split(' ')[0];
+    const isToday = isSameDay(d, new Date());
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'time-day' + (isToday ? '' : ' collapsed');
+    const header = document.createElement('div');
+    header.className = 'time-day-header';
+    header.innerHTML = `<span class="day-title">${dayLabel} <span class="arrow">▼</span></span>
+      <span class="day-total">${fmtDur(dayTotal)} · ${dayItems.length} ${plural(dayItems.length,'запись','записи','записей')}</span>`;
+    header.onclick = () => dayDiv.classList.toggle('collapsed');
+    dayDiv.appendChild(header);
+    const body = document.createElement('div'); body.className = 'time-day-body';
+    dayItems.forEach(w => {
+      const emp = employees.find(e => e.id === w.employeeId);
+      body.appendChild(renderWorkRow(w, true, emp ? emp.name : '(удалён)'));
+    });
+    dayDiv.appendChild(body);
+    empList.appendChild(dayDiv);
+  });
+}
+document.getElementById('teamReportBtn').onclick = () => {
+  const items = getFilteredEmpWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
+  if (!items.length) { alert('Нет завершённых записей'); return; }
+  const period = empTimeFilter === 'today' ? 'Сегодня ' + todayInput()
+               : empTimeFilter === 'week' ? 'Последние 7 дней' : 'Все записи';
+  let report = `👥 ОТЧЁТ ПО КОМАНДЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
+  const empTotals = {};
+  items.forEach(w => {
+    if (!empTotals[w.employeeId]) empTotals[w.employeeId] = 0;
+    empTotals[w.employeeId] += w.endTs - w.startTs;
+  });
+  report += `📊 СВОДКА:\n`;
+  Object.entries(empTotals).sort((a,b) => b[1] - a[1]).forEach(([empId, ms]) => {
+    const emp = employees.find(e => e.id === parseFloat(empId));
+    report += `  • ${emp ? emp.name : '(удалён)'}: ${fmtDur(ms)}\n`;
+  });
+  report += '\n';
+  const byDate = {};
+  items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
+  let grand = 0;
+  Object.keys(byDate).sort().forEach(dateStr => {
+    const dayItems = byDate[dateStr];
+    const dayTotal = dayItems.reduce((s,w) => s + (w.endTs - w.startTs), 0);
+    grand += dayTotal;
+    const d = new Date(dateStr + 'T00:00:00');
+    report += `📅 ${d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}  —  ${fmtDur(dayTotal)}\n${'-'.repeat(40)}\n`;
+    dayItems.forEach((w, i) => {
+      const emp = employees.find(e => e.id === w.employeeId);
+      const dur = fmtDurShort(w.endTs - w.startTs);
+      report += `${i+1}. ${w.start}–${w.end} (${dur})  👤 ${emp ? emp.name : '(удалён)'}\n   ${w.text}\n`;
+    });
+    report += '\n';
+  });
+  report += `${'='.repeat(40)}\nИТОГО: ${fmtDur(grand)}\nЗаписей: ${items.length}\n`;
+  showReportModal(report, `team-report-${todayInput()}.txt`);
+};
+
+/* ============================================================
+   ИСТОРИЯ СЕССИЙ
+============================================================ */
+function renderSessionsHistory() {
+  const box = document.getElementById('sessionsList');
+  if (!box) return;
+  box.innerHTML = '';
+  if (sessions.length === 0) {
+    box.innerHTML = '<div class="empty" style="padding:20px 0;font-size:13px">Пока нет завершённых сессий</div>';
+    return;
+  }
+  const sorted = [...sessions].sort((a, b) => b.startTs - a.startTs);
+  sorted.forEach(s => {
+    const emp = employees.find(e => e.id === s.employeeId);
+    const dur = s.endTs - s.startTs;
+    const callsCount = s.calls.length;
+    const okCount = s.calls.filter(c => c.mark === 'ok').length;
+    const failCount = s.calls.filter(c => c.mark === 'fail').length;
+    const isOpen = expandedSessions.has(s.id);
+
+    const acc = document.createElement('div');
+    acc.className = 'session-accordion' + (isOpen ? ' open' : '');
+
+    const header = document.createElement('div');
+    header.className = 'session-acc-header';
+    header.innerHTML = `
+      <span class="sa-arrow">▶</span>
+      <span class="sa-title">
+        🎧 <b>${emp ? emp.name : '(удалён)'}</b>
+        ${s.topic ? '— ' + s.topic : ''}
+        <div class="sa-meta" style="margin-top:4px">
+          📅 ${formatDate(new Date(s.startTs))}  •  ⏱ ${fmtDur(dur)}
+        </div>
+      </span>
+      <span class="sa-meta">
+        <span>📞 ${callsCount} ${plural(callsCount,'звонок','звонка','звонков')}</span>
+        <span class="sa-stat">✅ ${okCount}</span>
+        <span class="sa-fail">❌ ${failCount}</span>
+      </span>
+    `;
+    header.onclick = () => {
+      if (expandedSessions.has(s.id)) expandedSessions.delete(s.id);
+      else expandedSessions.add(s.id);
+      renderSessionsHistory();
+    };
+
+    const body = document.createElement('div');
+    body.className = 'session-acc-body';
+
+    const totalCallMs = s.calls.reduce((sum, c) => sum + (c.endTs - c.startTs), 0);
+    const avgCallMs = callsCount > 0 ? totalCallMs / callsCount : 0;
+    const conv = callsCount > 0 ? Math.round(okCount / callsCount * 100) : 0;
+    const statDiv = document.createElement('div');
+    statDiv.className = 'sess-stat';
+    statDiv.innerHTML = `
+      <b>Всего:</b> ${callsCount} зв. &nbsp;•&nbsp;
+      <b>✅</b> ${okCount} &nbsp;•&nbsp;
+      <b>❌</b> ${failCount} &nbsp;•&nbsp;
+      <b>Конверсия:</b> ${conv}% &nbsp;•&nbsp;
+      <b>В звонках:</b> ${fmtDurCall(totalCallMs)} &nbsp;•&nbsp;
+      <b>Средний:</b> ${fmtDurCall(avgCallMs)}
+    `;
+    body.appendChild(statDiv);
+
+    if (callsCount === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.style.cssText = 'font-size:13px;color:#71717a;padding:8px 0';
+      emptyMsg.textContent = 'Звонков не было';
+      body.appendChild(emptyMsg);
+    } else {
+      s.calls.forEach((call, i) => {
+        const item = document.createElement('div');
+        const markCls = call.mark === 'ok' ? 'mark-ok' : call.mark === 'fail' ? 'mark-fail' : '';
+        item.className = 'call-line ' + markCls;
+
+        const num = document.createElement('span');
+        num.className = 'cl-num'; num.textContent = '#' + (i + 1);
+
+        const time = document.createElement('span');
+        time.className = 'cl-time';
+        time.textContent = `${formatTimeShort(call.startTs)}–${formatTimeShort(call.endTs)}`;
+
+        const dur = document.createElement('span');
+        dur.className = 'cl-dur';
+        dur.textContent = fmtDurCall(call.endTs - call.startTs);
+
+        const mark = document.createElement('span');
+        mark.className = 'cl-mark';
+        mark.textContent = call.mark === 'ok' ? '✅' : call.mark === 'fail' ? '❌' : '⚪';
+
+        const os = document.createElement('span');
+        os.className = 'cl-os' + (call.os ? '' : ' empty');
+        os.textContent = call.os || '(нет ОС)';
+
+        item.appendChild(num);
+        item.appendChild(time);
+        item.appendChild(dur);
+        item.appendChild(mark);
+        item.appendChild(os);
+        body.appendChild(item);
+      });
+    }
+
+    if (s.notes && s.notes.trim()) {
+      const n = document.createElement('div');
+      n.className = 'sess-notes';
+      n.textContent = '📝 ' + s.notes.trim();
+      body.appendChild(n);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'session-acc-actions';
+    const repBtn = document.createElement('button');
+    repBtn.textContent = '📄 Отчёт';
+    repBtn.onclick = () => showSessionReport(s);
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '🗑 Удалить';
+    delBtn.style.background = '#7f1d1d';
+    delBtn.onclick = () => {
+      if (confirm('Удалить сессию из истории?')) {
+        sessions = sessions.filter(x => x.id !== s.id);
+        expandedSessions.delete(s.id);
+        save();
+        renderSessionsHistory();
+      }
+    };
+    actions.appendChild(repBtn);
+    actions.appendChild(delBtn);
+    body.appendChild(actions);
+
+    acc.appendChild(header);
+    acc.appendChild(body);
+    box.appendChild(acc);
+  });
+}
+
+/* ============================================================
+   ОТЧЁТ ПО СЕССИИ
+============================================================ */
+function buildSessionReport(s) {
+  const emp = employees.find(e => e.id === s.employeeId);
+  const dur = (s.endTs || Date.now()) - s.startTs;
+  const callsCount = s.calls.length;
+  const okCount = s.calls.filter(c => c.mark === 'ok').length;
+  const failCount = s.calls.filter(c => c.mark === 'fail').length;
+  const noneCount = callsCount - okCount - failCount;
+  const totalCallMs = s.calls.reduce((sum, c) => sum + (c.endTs - c.startTs), 0);
+  const avgCallMs = callsCount > 0 ? totalCallMs / callsCount : 0;
+  const longest = s.calls.reduce((max, c, idx) => {
+    const d = c.endTs - c.startTs;
+    return d > (max.d || 0) ? { d, idx } : max;
+  }, { d: 0, idx: -1 });
+  const conv = callsCount > 0 ? Math.round(okCount / callsCount * 100) : 0;
+
+  let report = '';
+  report += `🎧 СЕССИЯ С ${(emp ? emp.name : '(удалён)').toUpperCase()}\n`;
+  if (s.topic) report += `Тема: ${s.topic}\n`;
+  report += `Дата: ${formatDate(new Date(s.startTs))}\n`;
+  report += `Время: ${formatTimeShort(s.startTs)} – ${formatTimeShort(s.endTs || Date.now())} (${fmtDur(dur)})\n`;
+  report += `${'='.repeat(50)}\n\n`;
+
+  report += `📞 ЗВОНКИ (${callsCount}):\n`;
+  report += `${'-'.repeat(50)}\n`;
+  if (callsCount === 0) {
+    report += 'Звонков не было\n';
+  } else {
+    s.calls.forEach((c, i) => {
+      const cdur = fmtDurCall(c.endTs - c.startTs);
+      const mark = c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪';
+      report += `${String(i+1).padStart(2)}. ${formatTimeShort(c.startTs)}–${formatTimeShort(c.endTs)}  ${cdur.padEnd(8)} ${mark}\n`;
+      if (c.os) report += `     📝 ${c.os}\n`;
+    });
+  }
+  report += '\n';
+
+  report += `📊 СТАТИСТИКА:\n`;
+  report += `${'-'.repeat(50)}\n`;
+  report += `• Всего звонков: ${callsCount}\n`;
+  report += `• ✅ Есть диалог: ${okCount}\n`;
+  report += `• ❌ Отказ/другое: ${failCount}\n`;
+  if (noneCount > 0) report += `• ⚪ Без метки: ${noneCount}\n`;
+  report += `• Конверсия: ${conv}%\n`;
+  report += `• Общее время в звонках: ${fmtDurCall(totalCallMs)}\n`;
+  report += `• Средний звонок: ${fmtDurCall(avgCallMs)}\n`;
+  if (longest.idx >= 0) {
+    report += `• Самый длинный: ${fmtDurCall(longest.d)} (#${longest.idx + 1})\n`;
+  }
+  report += '\n';
+
+  if (s.notes && s.notes.trim()) {
+    report += `📝 ЗАМЕТКИ ПО СЕССИИ:\n`;
+    report += `${'-'.repeat(50)}\n`;
+    report += s.notes.trim() + '\n';
+  }
+
+  return report;
+}
+function buildSessionCSV(s) {
+  const emp = employees.find(e => e.id === s.employeeId);
+  const rows = [];
+  rows.push(['Сессия', emp ? emp.name : '(удалён)']);
+  rows.push(['Тема', s.topic || '']);
+  rows.push(['Начало', formatDate(new Date(s.startTs))]);
+  rows.push(['Конец', formatDate(new Date(s.endTs || Date.now()))]);
+  rows.push(['Длительность', fmtDur(s.endTs - s.startTs)]);
+  rows.push([]);
+  rows.push(['#', 'Начало', 'Конец', 'Длительность (сек)', 'Метка', 'ОС']);
+  s.calls.forEach((c, i) => {
+    const mark = c.mark === 'ok' ? 'есть диалог' : c.mark === 'fail' ? 'отказ/другое' : '';
+    rows.push([i + 1, formatTime(c.startTs), formatTime(c.endTs),
+      Math.round((c.endTs - c.startTs) / 1000), mark, c.os || '']);
+  });
+  rows.push([]);
+  rows.push(['Заметки по сессии', s.notes || '']);
+  return rows.map(r => r.map(cell => {
+    const v = String(cell == null ? '' : cell);
+    return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }).join(';')).join('\n');
+}
+function showSessionReport(s) {
+  const report = buildSessionReport(s);
+  const csv = buildSessionCSV(s);
+  const emp = employees.find(e => e.id === s.employeeId);
+  const dateStr = new Date(s.startTs);
+  const filename = `session-${(emp ? emp.name : 'emp').replace(/\s+/g, '_')}-${dateStr.getFullYear()}-${pad(dateStr.getMonth()+1)}-${pad(dateStr.getDate())}.txt`;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:720px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">📄 Отчёт по сессии</h3>
+    <textarea id="sessReportText" style="width:100%;height:420px;padding:12px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+      <button id="srClose" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Закрыть</button>
+      <button id="srDlTxt" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">💾 Скачать .txt</button>
+      <button id="srDlCsv" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">📊 Скачать .csv</button>
+      <button id="srCopy" style="background:#10b981;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:bold">📋 Копировать</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const ta = wrap.querySelector('#sessReportText');
+  ta.value = report;
+  wrap.querySelector('#srClose').onclick = () => wrap.remove();
+  wrap.querySelector('#srDlTxt').onclick = () => {
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  wrap.querySelector('#srDlCsv').onclick = () => {
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = filename.replace('.txt', '.csv'); a.click();
+    URL.revokeObjectURL(url);
+  };
+  wrap.querySelector('#srCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(report);
+      wrap.querySelector('#srCopy').textContent = '✓ Скопировано';
+      setTimeout(() => wrap.querySelector('#srCopy').textContent = '📋 Копировать', 1500);
+    } catch(e) { ta.select(); document.execCommand('copy'); }
+  };
+}
+
+/* ============================================================
+   ИТОГ ДНЯ
+============================================================ */
+function buildDailyReport(dateStr) {
+  const dayStart = new Date(dateStr + 'T00:00:00').getTime();
+  const dayLabel = new Date(dayStart).toLocaleDateString('ru-RU', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  let report = '';
+  report += `📊 ИТОГОВЫЙ ОТЧЁТ ЗА ДЕНЬ\n`;
+  report += `📅 ${dayLabel}\n`;
+  report += `Дата формирования: ${formatDate(new Date())}\n`;
+  report += `${'='.repeat(60)}\n\n`;
+
+  /* ---- СРЕЗ ДНЯ ---- */
+  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
+  if (pulseItems.length > 0) {
+    report += `📌 СРЕЗ ДНЯ\n`;
+    report += `${'-'.repeat(60)}\n`;
+    pulseItems.forEach(it => {
+      const plan = it.plan || '0';
+      const fact = it.fact || '0';
+      report += `${it.label} ${plan}/${fact}\n`;
+    });
+    let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
+    pulseItems.forEach(it => {
+      const p = parseFloat(String(it.plan || '').replace(',', '.'));
+      if (!isNaN(p)) { planSum += p; hasPlan = true; }
+      const f = parseFloat(String(it.fact || '').replace(',', '.'));
+      if (!isNaN(f)) { factSum += f; hasFact = true; }
+    });
+    const pct = planSum > 0 ? Math.round(factSum / planSum * 100) : 0;
+    const diff = factSum - planSum;
+    report += `${'-'.repeat(60)}\n`;
+    report += `📊 Итого: план ${hasPlan ? planSum : '—'} / факт ${hasFact ? factSum : '—'}`;
+    if (hasPlan) report += ` — ${pct}%`;
+    if (hasPlan && hasFact) report += ` (${diff >= 0 ? '+' : ''}${diff})`;
+    report += `\n\n`;
+  }
+
+  /* ---- ЗАДАЧИ ---- */
+  const dayStartMs = new Date(dateStr + 'T00:00:00').getTime();
+  const dayEndMs = dayStartMs + 24*3600*1000;
+
+  const doneOnDay = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStartMs && t.doneAt < dayEndMs);
+  const createdOnDay = tasks.filter(t => t.created >= dayStartMs && t.created < dayEndMs);
+  const activeTasks = tasks.filter(t => !t.done);
+  const overdueTasks = activeTasks.filter(t => t.deadline && t.deadline < Date.now());
+  const todayTasks = activeTasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), new Date(dateStr + 'T00:00:00')));
+
+  if (doneOnDay.length > 0 || createdOnDay.length > 0 || activeTasks.length > 0) {
+    report += `✅ ЗАДАЧИ\n`;
+    report += `${'-'.repeat(60)}\n`;
+
+    if (doneOnDay.length > 0) {
+      report += `\n  ✓ Выполнено в этот день (${doneOnDay.length}):\n`;
+      doneOnDay.sort((a,b) => a.doneAt - b.doneAt).forEach(t => {
+        const timeStr = formatTimeShort(t.doneAt);
+        const late = t.deadline && t.doneAt > t.deadline;
+        const mark = late ? '🔴' : '🟢';
+        report += `    ${mark} ${timeStr} — ${t.text}\n`;
+      });
+    }
+
+    if (createdOnDay.length > 0) {
+      report += `\n  ➕ Поставлено на этот день (${createdOnDay.length}):\n`;
+      createdOnDay.sort((a,b) => a.created - b.created).forEach(t => {
+        const status = t.done ? '✅' : '⬜';
+        report += `    ${status} ${t.text}\n`;
+      });
+    }
+
+    if (activeTasks.length > 0) {
+      report += `\n  🔄 В работе сейчас (${activeTasks.length}):\n`;
+      const sortedActive = [...activeTasks].sort((a, b) => {
+        const av = a.deadline || Infinity;
+        const bv = b.deadline || Infinity;
+        return av - bv;
+      });
+      sortedActive.slice(0, 30).forEach(t => {
+        const overdue = t.deadline && t.deadline < Date.now();
+        const mark = overdue ? '🔴' : '⬜';
+        const dl = t.deadline ? ` (до ${formatDate(new Date(t.deadline)).slice(0, 16)})` : '';
+        report += `    ${mark} ${t.text}${dl}\n`;
+      });
+      if (sortedActive.length > 30) {
+        report += `    …и ещё ${sortedActive.length - 30}\n`;
+      }
+    }
+
+    report += `\n  📈 Статистика задач:\n`;
+    report += `     • Всего активных: ${activeTasks.length}\n`;
+    report += `     • Просрочено: ${overdueTasks.length}\n`;
+    report += `     • На сегодня: ${todayTasks.length}\n`;
+    report += `     • Выполнено за день: ${doneOnDay.length}\n`;
+    report += `     • Поставлено за день: ${createdOnDay.length}\n`;
+    report += `\n`;
+  }
+
+  /* ---- МОЁ ВРЕМЯ ---- */
+  const myItems = workLog
+    .filter(w => w.date === dateStr && w.endTs)
+    .sort((a, b) => a.startTs - b.startTs);
+
+  const myTotalMs = myItems.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+  const mySyncMs = myItems
+    .filter(w => w.syncEmployeeId)
+    .reduce((s, w) => s + (w.endTs - w.startTs), 0);
+
+  const targetMs = WORK_DAY_HOURS * 3600000;
+  const myPct = Math.round(myTotalMs / targetMs * 100);
+
+  report += `⏱ МОЁ ВРЕМЯ — ${fmtDur(myTotalMs)} (${myPct}% от ${WORK_DAY_HOURS}ч)\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (myItems.length === 0) {
+    report += 'Записей нет\n';
+  } else {
+    myItems.forEach((w, i) => {
+      const dur = fmtDurShort(w.endTs - w.startTs);
+      const syncTag = w.syncEmployeeId
+        ? `  🤝 с ${(employees.find(e => e.id === w.syncEmployeeId) || {}).name || w.syncEmployeeName || 'КМ'}`
+        : '';
+      report += `${String(i + 1).padStart(2)}. ${w.start}–${w.end} (${dur})${syncTag}\n`;
+      report += `    ${w.text}\n`;
+    });
+  }
+  report += `\n`;
+  if (mySyncMs > 0) {
+    report += `   ↳ из них в сессиях с КМ: ${fmtDur(mySyncMs)}\n`;
+    report += `   ↳ моя самостоятельная работа: ${fmtDur(myTotalMs - mySyncMs)}\n`;
+  }
+
+  const myGaps = calcUnaccountedGaps(myItems, dateStr);
+  if (myGaps.length > 0) {
+    const gapMs = myGaps.reduce((s, g) => s + (g[1] - g[0]), 0);
+    report += `\n   ⚠️ Не учтено в рабочем окне (${WORK_WINDOW_START}:00–${WORK_WINDOW_END}:00): ${fmtDur(gapMs)}\n`;
+    myGaps.forEach(g => {
+      report += `      ${formatTimeShort(g[0])} – ${formatTimeShort(g[1])} (${fmtDurShort(g[1] - g[0])})\n`;
+    });
+  } else if (myItems.length > 0) {
+    report += `\n   ✓ Весь рабочий день покрыт записями\n`;
+  }
+  report += `\n`;
+
+  /* ---- ПО СОТРУДНИКАМ ---- */
+  report += `👥 ПО СОТРУДНИКАМ\n`;
+  report += `${'='.repeat(60)}\n\n`;
+
+  const daySessions = sessions.filter(s => {
+    const sDate = new Date(s.startTs);
+    return `${sDate.getFullYear()}-${pad(sDate.getMonth() + 1)}-${pad(sDate.getDate())}` === dateStr;
+  });
+
+  const empIdsWithSessions = [...new Set(daySessions.map(s => s.employeeId))];
+  const dayEmpLogs = empWorkLog.filter(w => w.date === dateStr && w.endTs);
+  const empIdsWithLogs = [...new Set(dayEmpLogs.map(w => w.employeeId))];
+  const allEmpIds = [...new Set([...empIdsWithSessions, ...empIdsWithLogs])];
+
+  if (allEmpIds.length === 0) {
+    report += 'Сессий и записей с КМ за этот день нет\n';
+  } else {
+    allEmpIds.forEach(empId => {
+      const emp = employees.find(e => e.id === empId);
+      const empName = emp ? emp.name : '(удалён)';
+      const empSessions = daySessions.filter(s => s.employeeId === empId);
+      const empLogs = dayEmpLogs.filter(w => w.employeeId === empId);
+      const empTotalMs = empLogs.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+
+      const allCalls = empSessions.flatMap(s => s.calls);
+      const okCalls = allCalls.filter(c => c.mark === 'ok').length;
+      const failCalls = allCalls.filter(c => c.mark === 'fail').length;
+      const noneCalls = allCalls.length - okCalls - failCalls;
+      const callMs = allCalls.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+      const conv = allCalls.length > 0 ? Math.round(okCalls / allCalls.length * 100) : 0;
+
+      report += `👤 ${empName.toUpperCase()}\n`;
+      report += `${'-'.repeat(60)}\n`;
+      report += `⏱ Общее время: ${fmtDur(empTotalMs)}\n`;
+      report += `🎧 Сессий: ${empSessions.length}\n`;
+      report += `📞 Звонков: ${allCalls.length}  ✅ ${okCalls}  ❌ ${failCalls}`;
+      if (noneCalls > 0) report += `  ⚪ ${noneCalls}`;
+      report += `\n`;
+      if (allCalls.length > 0) {
+        report += `📈 Конверсия: ${conv}%\n`;
+        report += `⏱ В звонках: ${fmtDurCall(callMs)}  (средний ${fmtDurCall(callMs / allCalls.length)})\n`;
+      }
+      report += `\n`;
+
+      empSessions.forEach((s, si) => {
+        const sDur = s.endTs - s.startTs;
+        report += `  🎧 Сессия ${si + 1}: ${formatTimeShort(s.startTs)} – ${formatTimeShort(s.endTs)} (${fmtDur(sDur)})\n`;
+        if (s.topic) report += `     Тема: ${s.topic}\n`;
+
+        if (s.calls.length === 0) {
+          report += `     Звонков не было\n`;
+        } else {
+          s.calls.forEach((c, ci) => {
+            const cdur = fmtDurCall(c.endTs - c.startTs);
+            const mark = c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪';
+            report += `     ${String(ci + 1).padStart(2)}. ${formatTimeShort(c.startTs)}–${formatTimeShort(c.endTs)}  ${cdur.padEnd(8)} ${mark}`;
+            if (c.os) report += `\n         📝 ${c.os}`;
+            report += `\n`;
+          });
+        }
+
+        if (s.notes && s.notes.trim()) {
+          report += `     📝 ОС по сессии:\n`;
+          const noteLines = s.notes.trim().split('\n');
+          noteLines.forEach(line => { report += `        ${line}\n`; });
+        }
+        report += `\n`;
+      });
+    });
+  }
+
+  /* ---- ОБЩАЯ СВОДКА ---- */
+  report += `${'='.repeat(60)}\n`;
+  report += `📌 ОБЩАЯ СВОДКА ЗА ДЕНЬ\n`;
+  report += `${'='.repeat(60)}\n`;
+
+  const totalCallsAll = daySessions.flatMap(s => s.calls);
+  const okAll = totalCallsAll.filter(c => c.mark === 'ok').length;
+  const failAll = totalCallsAll.filter(c => c.mark === 'fail').length;
+  const convAll = totalCallsAll.length > 0 ? Math.round(okAll / totalCallsAll.length * 100) : 0;
+  const callMsAll = totalCallsAll.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+
+  report += `• Моё время всего: ${fmtDur(myTotalMs)} (${myPct}%)\n`;
+  report += `• Из них в сессиях с КМ: ${fmtDur(mySyncMs)}\n`;
+  report += `• КМ в работе: ${allEmpIds.length}\n`;
+  report += `• Сессий всего: ${daySessions.length}\n`;
+  report += `• Звонков всего: ${totalCallsAll.length}  (✅ ${okAll}, ❌ ${failAll}, конверсия ${convAll}%)\n`;
+  report += `• Время в звонках: ${fmtDurCall(callMsAll)}\n`;
+  report += `• Задач выполнено: ${doneOnDay.length}   • В работе: ${activeTasks.length}   • Просрочено: ${overdueTasks.length}\n`;
+
+  return report;
+}
+
+function buildDailyCSV(dateStr) {
+  const rows = [];
+
+  // Срез дня
+  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
+  if (pulseItems.length > 0) {
+    rows.push(['=== СРЕЗ ДНЯ ===']);
+    rows.push(['Название', 'План', 'Факт', '%']);
+    let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
+    pulseItems.forEach(it => {
+      const p = parseFloat(String(it.plan || '').replace(',', '.'));
+      const f = parseFloat(String(it.fact || '').replace(',', '.'));
+      if (!isNaN(p)) { planSum += p; hasPlan = true; }
+      if (!isNaN(f)) { factSum += f; hasFact = true; }
+      const pctItem = (!isNaN(p) && !isNaN(f) && p > 0) ? Math.round(f / p * 100) + '%' : '';
+      rows.push([it.label, it.plan || '', it.fact || '', pctItem]);
+    });
+    const pctTotal = planSum > 0 ? Math.round(factSum / planSum * 100) + '%' : '';
+    rows.push(['ИТОГО', hasPlan ? planSum : '', hasFact ? factSum : '', pctTotal]);
+    rows.push([]);
+  }
+
+  // Задачи
+  const dayStartMs = new Date(dateStr + 'T00:00:00').getTime();
+  const dayEndMs = dayStartMs + 24*3600*1000;
+  const doneOnDay = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStartMs && t.doneAt < dayEndMs);
+  const createdOnDay = tasks.filter(t => t.created >= dayStartMs && t.created < dayEndMs);
+  const activeTasks = tasks.filter(t => !t.done);
+
+  if (doneOnDay.length > 0 || createdOnDay.length > 0 || activeTasks.length > 0) {
+    rows.push(['=== ЗАДАЧИ ===']);
+    rows.push(['Статус', 'Текст', 'Срок', 'Выполнено в']);
+    doneOnDay.sort((a,b) => a.doneAt - b.doneAt).forEach(t => {
+      rows.push(['выполнено', t.text,
+        t.deadline ? formatDate(new Date(t.deadline)) : '',
+        formatDate(new Date(t.doneAt))]);
+    });
+    createdOnDay.filter(t => !t.done).forEach(t => {
+      rows.push(['в работе (создано в этот день)', t.text,
+        t.deadline ? formatDate(new Date(t.deadline)) : '', '']);
+    });
+    const activeNotCreatedToday = activeTasks.filter(t => t.created < dayStartMs || t.created >= dayEndMs);
+    activeNotCreatedToday.forEach(t => {
+      const overdue = t.deadline && t.deadline < Date.now();
+      rows.push([overdue ? 'в работе (просрочено)' : 'в работе', t.text,
+        t.deadline ? formatDate(new Date(t.deadline)) : '', '']);
+    });
+    rows.push([]);
+  }
+
+  // Моё время
+  rows.push(['=== МОЁ ВРЕМЯ ===']);
+  rows.push(['Начало', 'Конец', 'Длительность (мин)', 'Синхрон с КМ', 'Текст']);
+  const myItems = workLog
+    .filter(w => w.date === dateStr && w.endTs)
+    .sort((a, b) => a.startTs - b.startTs);
+  myItems.forEach(w => {
+    const syncName = w.syncEmployeeId
+      ? ((employees.find(e => e.id === w.syncEmployeeId) || {}).name || w.syncEmployeeName || '')
+      : '';
+    rows.push([
+      w.start, w.end,
+      Math.round((w.endTs - w.startTs) / 60000),
+      syncName, w.text
+    ]);
+  });
+  rows.push([]);
+
+  // Сессии
+  const daySessions = sessions.filter(s => {
+    const d = new Date(s.startTs);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === dateStr;
+  });
+
+  if (daySessions.length > 0) {
+    rows.push(['=== СЕССИИ С КМ ===']);
+    rows.push(['КМ', 'Тема сессии', 'Начало сессии', 'Конец сессии', '№ звонка',
+      'Начало звонка', 'Конец звонка', 'Длит. (сек)', 'Метка', 'ОС звонка', 'ОС сессии']);
+
+    daySessions.sort((a, b) => a.startTs - b.startTs).forEach(s => {
+      const emp = employees.find(e => e.id === s.employeeId);
+      const empName = emp ? emp.name : '(удалён)';
+      if (s.calls.length === 0) {
+        rows.push([empName, s.topic || '', formatTime(s.startTs), formatTime(s.endTs),
+          '', '', '', '', '', '', s.notes || '']);
+      } else {
+        s.calls.forEach((c, i) => {
+          const mark = c.mark === 'ok' ? 'есть диалог' : c.mark === 'fail' ? 'отказ/другое' : '';
+          rows.push([
+            empName, s.topic || '',
+            formatTime(s.startTs), formatTime(s.endTs),
+            i + 1,
+            formatTime(c.startTs), formatTime(c.endTs),
+            Math.round((c.endTs - c.startTs) / 1000),
+            mark, c.os || '', s.notes || ''
+          ]);
+        });
+      }
+    });
+  }
+
+  return rows.map(r => r.map(cell => {
+    const v = String(cell == null ? '' : cell);
+    return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }).join(';')).join('\n');
+}
+
+document.getElementById('dailyReportBtn').onclick = () => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:380px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">📊 Итоговый отчёт</h3>
+    <label style="font-size:13px;color:#a1a1aa">Дата</label>
+    <input type="date" id="dailyDateInput" value="${todayInput()}"
+      style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 16px;color-scheme:dark">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button id="dailyCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
+      <button id="dailyShow" style="background:#22c55e;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:500">Показать</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+
+  wrap.querySelector('#dailyCancel').onclick = () => wrap.remove();
+  wrap.querySelector('#dailyShow').onclick = () => {
+    const dateStr = wrap.querySelector('#dailyDateInput').value;
+    wrap.remove();
+    showDailyReport(dateStr);
+  };
+};
+
+function showDailyReport(dateStr) {
+  const report = buildDailyReport(dateStr);
+  const csv = buildDailyCSV(dateStr);
+  const filename = `daily-report-${dateStr}.txt`;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:760px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:14px;font-size:16px">📊 Итог дня — ${dateStr}</h3>
+    <textarea id="dailyReportText" style="width:100%;height:480px;padding:12px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+      <button id="drClose" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Закрыть</button>
+      <button id="drTxt" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">💾 Скачать .txt</button>
+      <button id="drCsv" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">📊 Скачать .csv</button>
+      <button id="drCopy" style="background:#22c55e;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:bold">📋 Копировать</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const ta = wrap.querySelector('#dailyReportText');
+  ta.value = report;
+  wrap.querySelector('#drClose').onclick = () => wrap.remove();
+  wrap.querySelector('#drTxt').onclick = () => {
+    const blob = new Blob([report], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  wrap.querySelector('#drCsv').onclick = () => {
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = filename.replace('.txt', '.csv'); a.click();
+    URL.revokeObjectURL(url);
+  };
+  wrap.querySelector('#drCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(report);
+      wrap.querySelector('#drCopy').textContent = '✓ Скопировано';
+      setTimeout(() => wrap.querySelector('#drCopy').textContent = '📋 Копировать', 1500);
+    } catch(e) { ta.select(); document.execCommand('copy'); }
+  };
+}
+
+/* ============================================================
+   ЭКСПОРТ / ИМПОРТ
+============================================================ */
+document.getElementById('exportBtn').onclick = () => {
+  const data = buildExportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `tasker-backup-${todayInput()}.json`; a.click();
+  URL.revokeObjectURL(url);
+  meta.lastExport = Date.now();
+  localStorage.setItem(KEYS.meta, JSON.stringify(meta));
+  updateBackupBanner();
+};
+document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+document.getElementById('importFile').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const tCount = (data.tasks||[]).length;
+      const wCount = (data.workLog||[]).length;
+      const eCount = (data.employees||[]).length;
+      const ewCount = (data.empWorkLog||[]).length;
+      const sCount = (data.sessions||[]).length;
+      if (data.tasks || data.workLog || data.employees || data.sessions) {
+        if (confirm(`Импортировать:\n• ${tCount} задач\n• ${wCount} записей моего времени\n• ${eCount} КМ\n• ${ewCount} записей времени КМ\n• ${sCount} сессий\n\n⚠️ Текущие данные будут заменены!`)) {
+          tasks = data.tasks || [];
+          workLog = data.workLog || [];
+          employees = data.employees || [];
+          empWorkLog = data.empWorkLog || [];
+          sessions = data.sessions || [];
+          dailyPulse = data.dailyPulse || {};
+          activeEmpTimer = null;
+          activeTimer = null;
+          save(); render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory(); updateEmpTimerDisplay(); updateTimerDisplay();
+          alert('✓ Импорт завершён');
+        }
+      } else if (Array.isArray(data)) {
+        if (confirm(`Импортировать ${data.length} задач (старый формат)?`)) {
+          tasks = data; save(); render();
+        }
+      } else alert('Неизвестный формат файла');
+    } catch(err) { alert('Ошибка чтения: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+/* ============================================================
+   БАННЕР БЭКАПА
+============================================================ */
+function updateBackupBanner() {
+  const banner = document.getElementById('backupBanner');
+  const txt = document.getElementById('backupBannerText');
+  if (!banner) return;
+  const lastExport = meta.lastExport || 0;
+  const daysSince = (Date.now() - lastExport) / 86400000;
+  const hasData = tasks.length > 0 || workLog.length > 0 || employees.length > 0 || empWorkLog.length > 0 || sessions.length > 0;
+  if (!hasData) { banner.classList.remove('show'); return; }
+  if (daysSince >= 1) {
+    banner.classList.add('show');
+    if (lastExport === 0) {
+      txt.textContent = '⚠️ Данные ни разу не экспортировались. Сделай бэкап — браузер может почистить localStorage.';
+    } else {
+      txt.textContent = `⚠️ Последний бэкап ${Math.floor(daysSince)} ${plural(Math.floor(daysSince),'день','дня','дней')} назад. Сделай новый.`;
+    }
+  } else {
+    banner.classList.remove('show');
+  }
+}
+document.getElementById('bannerExportBtn').onclick = () => document.getElementById('exportBtn').click();
+document.getElementById('bannerClose').onclick = () => {
+  document.getElementById('backupBanner').classList.remove('show');
+  setTimeout(updateBackupBanner, 3600000);
+};
+
+window.addEventListener('beforeunload', (e) => {
+  const lastExport = meta.lastExport || 0;
+  const daysSince = (Date.now() - lastExport) / 86400000;
+  const hasData = tasks.length > 0 || workLog.length > 0;
+  if (hasData && daysSince >= 3 && !autoSaveFileHandle) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+/* ============================================================
+   БУДИЛЬНИК
+============================================================ */
+function playBeep() {
+  try {
+    if (!alarmAudioCtx) alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = alarmAudioCtx.createOscillator(); const g = alarmAudioCtx.createGain();
+    o.connect(g); g.connect(alarmAudioCtx.destination);
+    o.frequency.value = 880; o.type = 'sine';
+    g.gain.setValueAtTime(0.3, alarmAudioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, alarmAudioCtx.currentTime + 0.4);
+    o.start(); o.stop(alarmAudioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+function showAlarm(text) {
+  document.getElementById('alarmText').textContent = '🔔 ' + text;
+  document.getElementById('alarmBanner').style.display = 'block';
+  if (alarmInterval) clearInterval(alarmInterval);
+  playBeep(); alarmInterval = setInterval(playBeep, 1200);
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('🔔 Напоминание', { body: text });
+  }
+}
+function stopAlarm() {
+  document.getElementById('alarmBanner').style.display = 'none';
+  if (alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
+}
+setInterval(() => {
+  const now = Date.now();
+  tasks.forEach(t => {
+    if (!t.done && t.remind && t.remind <= now && !t.notified) {
+      t.notified = true; save(); showAlarm(t.text);
+    }
+  });
+  render();
+  if (activeEmpTimer) updateEmpTimerDisplay();
+  if (activeTimer) updateTimerDisplay();
+}, 15000);
+if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+
+/* ============================================================
+   СТАРТ
+============================================================ */
+render();
+renderWork();
+renderPulse();
+renderTeam();
+renderSessionsHistory();
+updateTopButtons();
+updateTimerLocks();
+updateBackupBanner();
+setStatus('ok', 'готово');
+
+if (activeTimer) timerTickId = setInterval(updateTimerDisplay, 1000);
+if (activeEmpTimer) empTimerTickId = setInterval(updateEmpTimerDisplay, 1000);
+updateTimerDisplay();
+updateEmpTimerDisplay();
+
+newText.focus();
+</script>
+</body>
+</html>
+```
