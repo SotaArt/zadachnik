@@ -534,6 +534,7 @@
       <button id="exportBtn" title="Скачать бэкап JSON">📦 Экспорт</button>
       <button id="importBtn" title="Загрузить из файла">📥 Импорт</button>
       <button id="linkAutosaveBtn" title="Привязать файл для автосохранения">🔗 Автосохр.</button>
+      <button id="syncBtn" title="Синхронизация между устройствами (GitHub Gist)">☁ Синхр.</button>
       <button class="accent" id="dailyReportBtn" style="background:#22c55e">📊 Итог дня</button>
       <button class="accent" id="addEmpBtn">+ Добавить КМ</button>
       <button class="warn" id="delEmpBtn" disabled>🗑 Удалить КМ</button>
@@ -783,7 +784,8 @@ const KEYS = {
   empTimer: 'tasker_data_v1_emptimer',
   meta: 'tasker_data_v1_meta',
   sessions: 'tasker_data_v1_sessions',
-  pulse: 'tasker_data_v1_pulse'
+  pulse: 'tasker_data_v1_pulse',
+  sync: 'tasker_data_v1_sync'
 };
 
 let tasks = JSON.parse(localStorage.getItem(KEYS.tasks) || '[]');
@@ -795,6 +797,8 @@ let activeTimer = JSON.parse(localStorage.getItem(KEYS.timer) || 'null');
 let activeEmpTimer = JSON.parse(localStorage.getItem(KEYS.empTimer) || 'null');
 let meta = JSON.parse(localStorage.getItem(KEYS.meta) || '{"lastExport":null,"firstRun":' + Date.now() + '}');
 let dailyPulse = JSON.parse(localStorage.getItem(KEYS.pulse) || '{}');
+let syncState = JSON.parse(localStorage.getItem(KEYS.sync)) ||
+  { enabled: false, token: null, gistId: null, login: null, lastPush: null, autoPush: true };
 
 let filter = 'active';
 let timeFilter = 'today';
@@ -879,7 +883,7 @@ function saveToFile() {
     }
   }, 800);
 }
-function save() { saveLocal(); saveToFile(); }
+function save() { saveLocal(); saveToFile(); scheduleCloudSync(); }
 
 function setStatus(kind, text) {
   const el = document.getElementById('autosaveStatus');
@@ -889,7 +893,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 19,
+    version: 20,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -3095,6 +3099,215 @@ document.getElementById('importFile').onchange = (e) => {
 };
 
 /* ============================================================
+   СИНХРОНИЗАЦИЯ (GitHub Gist)
+============================================================ */
+const GIST_DESC = 'Задачник sync';
+const GIST_FILE = 'tasker-data.json';
+
+function saveSyncState() {
+  try { localStorage.setItem(KEYS.sync, JSON.stringify(syncState)); } catch (e) {}
+}
+function hasAnyData() {
+  return tasks.length > 0 || workLog.length > 0 || employees.length > 0 || empWorkLog.length > 0 ||
+    sessions.length > 0 || Object.keys(dailyPulse).length > 0;
+}
+function gistHeaders() {
+  return { Authorization: 'Bearer ' + syncState.token, Accept: 'application/vnd.github+json' };
+}
+function cloudContent() {
+  return JSON.stringify(buildExportData(), null, 2);
+}
+function applyRemote(remote) {
+  const clean = sanitizeImported(remote);
+  tasks = clean.tasks; workLog = clean.workLog; employees = clean.employees;
+  empWorkLog = clean.empWorkLog; sessions = clean.sessions; dailyPulse = clean.dailyPulse;
+  activeEmpTimer = null; activeTimer = null;
+  flushSave();
+  render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory();
+  updateEmpTimerDisplay(); updateTimerDisplay();
+}
+
+let cloudPushDebounce = null;
+function scheduleCloudSync() {
+  if (!syncState.enabled || !syncState.token || !syncState.gistId || !syncState.autoPush) return;
+  if (cloudPushDebounce) clearTimeout(cloudPushDebounce);
+  cloudPushDebounce = setTimeout(() => { cloudPushDebounce = null; cloudPush().catch(() => {}); }, 3000);
+}
+
+async function cloudPush() {
+  if (!syncState.token || !syncState.gistId) return false;
+  try {
+    const res = await fetch('https://api.github.com/gists/' + syncState.gistId, {
+      method: 'PATCH',
+      headers: Object.assign(gistHeaders(), { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ files: { [GIST_FILE]: { content: cloudContent() } } })
+    });
+    if (!res.ok) { console.error('sync push error', res.status); setStatus('error', 'синхр. ошибка ' + res.status); return false; }
+    syncState.lastPush = Date.now(); saveSyncState();
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+
+async function cloudPull(silent) {
+  if (!syncState.token || !syncState.gistId) return false;
+  try {
+    const res = await fetch('https://api.github.com/gists/' + syncState.gistId, { headers: gistHeaders() });
+    if (!res.ok) { if (!silent) alert('Не удалось загрузить из облака (' + res.status + ')'); return false; }
+    const g = await res.json();
+    const files = g.files || {};
+    const file = files[GIST_FILE] || Object.values(files)[0];
+    if (!file || !file.content) { if (!silent) alert('В облаке пусто'); return false; }
+    let remote;
+    try { remote = JSON.parse(file.content); } catch (e) { if (!silent) alert('Данные в облаке повреждены'); return false; }
+    if (!silent && !confirm('Загрузить данные с облака?\n\n(!) Данные на этом устройстве будут ЗАМЕНЕНЫ.')) return false;
+    applyRemote(remote);
+    setStatus('ok', 'загружено с облака');
+    return true;
+  } catch (e) { console.error(e); return false; }
+}
+
+async function cloudSetup(token) {
+  try {
+    const res = await fetch('https://api.github.com/user', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
+    });
+    if (!res.ok) { alert('Токен не подошёл (' + res.status + '). Проверь, что у токена есть scope: gist'); return; }
+    const user = await res.json();
+
+    let gistId = null;
+    let wasCreated = false;
+    const listRes = await fetch('https://api.github.com/gists?per_page=100', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
+    });
+    if (listRes.ok) {
+      const gists = await listRes.json();
+      const found = gists.find(g => (g.description || '').startsWith(GIST_DESC) && g.owner && g.owner.login === user.login);
+      if (found) gistId = found.id;
+    }
+
+    if (!gistId) {
+      const createRes = await fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: cloudContent() } } })
+      });
+      if (!createRes.ok) { alert('Не удалось создать gist (' + createRes.status + ')'); return; }
+      const g = await createRes.json();
+      gistId = g.id;
+      wasCreated = true;
+    }
+
+    syncState = { enabled: true, token, gistId, login: user.login, lastPush: Date.now(), autoPush: syncState.autoPush !== false };
+    saveSyncState();
+
+    if (!wasCreated) {
+      const gistRes = await fetch('https://api.github.com/gists/' + gistId, { headers: gistHeaders() });
+      if (gistRes.ok) {
+        const g = await gistRes.json();
+        const files = g.files || {};
+        const file = files[GIST_FILE] || Object.values(files)[0];
+        let remote = null;
+        if (file && file.content) { try { remote = JSON.parse(file.content); } catch (e) {} }
+        const remoteHas = !!remote && (remote.tasks.length || remote.workLog.length || remote.employees.length || remote.sessions.length);
+        const localHas = hasAnyData();
+        if (remoteHas && localHas) {
+          const fromCloud = confirm('В облаке уже есть данные, и на этом устройстве тоже есть данные.\n\n' +
+            'OK — загрузить С ОБЛАКА (данные устройства будут заменены)\n' +
+            'Отмена — оставить локальные и выгрузить ИХ в облако');
+          if (fromCloud) await cloudPull(true);
+          else await cloudPush();
+        } else if (remoteHas && !localHas) {
+          if (confirm('В облаке найдены данные. Загрузить их на это устройство?')) await cloudPull(true);
+          else await cloudPush();
+        }
+      }
+    }
+    setStatus('ok', 'синхронизация включена');
+  } catch (e) {
+    console.error(e);
+    alert('Ошибка подключения: ' + e.message);
+  }
+}
+
+function cloudDisable() {
+  syncState = { enabled: false, token: null, gistId: null, login: null, lastPush: null, autoPush: true };
+  saveSyncState();
+}
+
+function updateSyncStatusUI(wrap) {
+  const st = wrap.querySelector('#syncStatus');
+  const disc = wrap.querySelector('#syncDisconnect');
+  if (syncState.enabled && syncState.login) {
+    st.textContent = '✓ Подключено: ' + syncState.login +
+      (syncState.lastPush ? ' · последняя выгрузка ' + new Date(syncState.lastPush).toLocaleTimeString() : '');
+    disc.style.display = 'inline-block';
+  } else {
+    st.textContent = '— Синхронизация выключена —';
+    disc.style.display = 'none';
+  }
+}
+
+function openSyncModal() {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;overflow:auto';
+  wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:500px;width:100%;color:#e4e4e7">
+    <h3 style="margin-bottom:12px;font-size:16px">☁ Синхронизация (GitHub Gist)</h3>
+    <div id="syncStatus" style="font-size:13px;color:#a1a1aa;margin-bottom:14px">—</div>
+
+    <label style="font-size:12px;color:#a1a1aa">GitHub-токен (scope: <b>gist</b>)</label>
+    <input type="password" id="syncToken" placeholder="ghp_..." autocomplete="off"
+      style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 6px;font-size:14px">
+    <div style="font-size:11px;color:#71717a;margin-bottom:12px">
+      Создай отдельный токен здесь:
+      <a href="https://github.com/settings/tokens/new?scopes=gist&description=zadachnik" target="_blank" rel="noopener" style="color:#6366f1">github.com/settings/tokens</a>
+      — отметь только «gist». Токен хранится только в этом браузере.
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button id="syncConnect" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-weight:500">✔ Подключить</button>
+      <button id="syncPush" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">⬆ Выгрузить сейчас</button>
+      <button id="syncPull" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">⬇ Загрузить с облака</button>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#a1a1aa;margin-bottom:14px;cursor:pointer">
+      <input type="checkbox" id="syncAuto" ${syncState.autoPush ? 'checked' : ''}> Автовыгрузка при изменениях
+    </label>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap">
+      <button id="syncDisconnect" style="background:#7f1d1d;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">⎋ Отключить</button>
+      <button id="syncClose" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Закрыть</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+
+  updateSyncStatusUI(wrap);
+
+  wrap.querySelector('#syncConnect').onclick = async () => {
+    const t = wrap.querySelector('#syncToken').value.trim();
+    if (!t) { alert('Вставь GitHub-токен'); return; }
+    wrap.querySelector('#syncConnect').disabled = true;
+    await cloudSetup(t);
+    wrap.querySelector('#syncConnect').disabled = false;
+    wrap.querySelector('#syncToken').value = '';
+    updateSyncStatusUI(wrap);
+  };
+  wrap.querySelector('#syncPush').onclick = () => { cloudPush(); };
+  wrap.querySelector('#syncPull').onclick = () => { cloudPull(false); };
+  wrap.querySelector('#syncAuto').onchange = (e) => { syncState.autoPush = e.target.checked; saveSyncState(); };
+  wrap.querySelector('#syncDisconnect').onclick = () => {
+    if (confirm('Отключить синхронизацию?')) { cloudDisable(); updateSyncStatusUI(wrap); }
+  };
+  wrap.querySelector('#syncClose').onclick = () => wrap.remove();
+}
+
+document.getElementById('syncBtn').onclick = openSyncModal;
+
+function cloudInit() {
+  if (!syncState.enabled || !syncState.token || !syncState.gistId) return;
+  if (!hasAnyData()) cloudPull(true);
+}
+
+/* ============================================================
    БАННЕР БЭКАПА
 ============================================================ */
 function updateBackupBanner() {
@@ -3122,7 +3335,11 @@ document.getElementById('bannerClose').onclick = () => {
   setTimeout(updateBackupBanner, 3600000);
 };
 
-window.addEventListener('pagehide', flushSave);
+window.addEventListener('pagehide', () => {
+  flushSave();
+  if (cloudPushDebounce) { clearTimeout(cloudPushDebounce); cloudPushDebounce = null; }
+  if (syncState.enabled && syncState.autoPush && syncState.token && syncState.gistId) cloudPush();
+});
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushSave();
 });
@@ -3195,6 +3412,7 @@ renderSessionsHistory();
 updateTopButtons();
 updateTimerLocks();
 updateBackupBanner();
+cloudInit();
 setStatus('ok', 'готово');
 
 document.addEventListener('keydown', (e) => {
