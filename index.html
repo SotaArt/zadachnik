@@ -898,7 +898,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 21,
+    version: 22,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -1127,6 +1127,8 @@ function renderTask(t, now) {
     s.className = wasLate ? 'done-late' : 'done-ok';
     s.textContent = (wasLate?'🔴 с опозданием: ':'🟢 ')+formatDate(new Date(t.doneAt));
     meta.appendChild(s); }
+  if (t.done && t.result) { const s = document.createElement('span');
+    s.className='done-result'; s.textContent='💬 результат: '+t.result; meta.appendChild(s); }
   if (meta.children.length) content.appendChild(meta);
   const actions = document.createElement('div'); actions.className = 'actions';
   const editBtn = document.createElement('button'); editBtn.textContent = '📝';
@@ -1142,7 +1144,7 @@ function addTask() {
   tasks.push({ id: Date.now()+Math.random(), text,
     deadline: fromLocalInput(newDeadline.value), remind: fromLocalInput(newRemind.value),
     repeat: newRepeat.value || null,
-    done: false, doneAt: null, notified: false, created: Date.now() });
+    done: false, doneAt: null, notified: false, created: Date.now(), result: '' });
   save();
   newText.value=''; newDeadline.value=''; newRemind.value=''; newRepeat.value='';
   newText.focus(); render();
@@ -1166,7 +1168,7 @@ function toggleDone(id) {
         deadline: nextRepeatDate(baseDeadline, t.repeat),
         remind: t.remind ? nextRepeatDate(t.remind, t.repeat) : null,
         repeat: t.repeat,
-        done: false, doneAt: null, notified: false, created: Date.now() });
+        done: false, doneAt: null, notified: false, created: Date.now(), result: '' });
     }
   } else { t.done=false; t.doneAt=null; t.notified=false; }
   save(); render();
@@ -1182,11 +1184,14 @@ function openEditDialog(id) {
     <label style="font-size:13px;color:#a1a1aa">🔔 Напоминание</label>
     <input type="datetime-local" id="editRemind" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px;color-scheme:dark">
     <label style="font-size:13px;color:#a1a1aa">🔁 Повтор</label>
-    <select id="editRepeat" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 16px">
+    <select id="editRepeat" style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 12px">
       <option value="">Без повтора</option><option value="daily">Каждый день</option>
       <option value="weekdays">По будням</option><option value="weekly">Каждую неделю</option>
       <option value="monthly">Каждый месяц</option>
     </select>
+    <label style="font-size:13px;color:#a1a1aa">💬 Результат (при завершении)</label>
+    <textarea id="editResult" placeholder="Коротко: что сделано / ответ / итог"
+      style="width:100%;padding:10px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;margin:6px 0 16px;resize:vertical;min-height:70px;font-size:14px;font-family:inherit"></textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="editCancel" style="background:#3f3f56;color:#e4e4e7;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Отмена</button>
       <button id="editSave" style="background:#6366f1;color:white;border:none;padding:10px 16px;border-radius:8px;cursor:pointer">Сохранить</button>
@@ -1195,11 +1200,13 @@ function openEditDialog(id) {
   wrap.querySelector('#editDeadline').value = toLocalInput(t.deadline);
   wrap.querySelector('#editRemind').value = toLocalInput(t.remind);
   wrap.querySelector('#editRepeat').value = t.repeat || '';
+  wrap.querySelector('#editResult').value = t.result || '';
   wrap.querySelector('#editCancel').onclick = () => wrap.remove();
   wrap.querySelector('#editSave').onclick = () => {
     t.deadline = fromLocalInput(wrap.querySelector('#editDeadline').value);
     t.remind = fromLocalInput(wrap.querySelector('#editRemind').value);
     t.repeat = wrap.querySelector('#editRepeat').value || null;
+    t.result = wrap.querySelector('#editResult').value.trim();
     t.notified = false; save(); render(); wrap.remove();
   };
 }
@@ -2690,6 +2697,7 @@ function buildDailyReport(dateStr) {
         const late = t.deadline && t.doneAt > t.deadline;
         const mark = late ? '🔴' : '🟢';
         report += `    ${mark} ${timeStr} — ${t.text}\n`;
+        if (t.result) report += `       💬 ${t.result}\n`;
       });
     }
 
