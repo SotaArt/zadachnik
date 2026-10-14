@@ -1128,14 +1128,19 @@ function renderTask(t, now) {
     s.textContent = (wasLate?'🔴 с опозданием: ':'🟢 ')+formatDate(new Date(t.doneAt));
     meta.appendChild(s); }
   if (t.done && t.result) { const s = document.createElement('span');
-    s.className='done-result'; s.textContent='💬 результат: '+t.result; meta.appendChild(s); }
+    s.className='done-result'; s.textContent='💬 '+t.result; meta.appendChild(s); }
   if (meta.children.length) content.appendChild(meta);
   const actions = document.createElement('div'); actions.className = 'actions';
   const editBtn = document.createElement('button'); editBtn.textContent = '📝';
   editBtn.onclick = () => openEditDialog(t.id);
+  const postponeBtn = document.createElement('button'); postponeBtn.textContent = '⏭';
+  postponeBtn.title = 'Перенести на завтра';
+  postponeBtn.onclick = () => postponeTask(t.id);
   const delBtn = document.createElement('button'); delBtn.className='danger'; delBtn.textContent='🗑';
   delBtn.onclick = () => { if (confirm('Удалить задачу безвозвратно?')) { tasks = tasks.filter(x => x.id !== t.id); save(); render(); } };
-  actions.appendChild(editBtn); actions.appendChild(delBtn);
+  actions.appendChild(editBtn);
+  if (!t.done) actions.appendChild(postponeBtn);
+  actions.appendChild(delBtn);
   div.appendChild(cb); div.appendChild(content); div.appendChild(actions);
   return div;
 }
@@ -1158,6 +1163,17 @@ function nextRepeatDate(ts, repeat) {
   else return null;
   return d.getTime();
 }
+function postponeTask(id, days) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  if (!t.deadline) {
+    const d = new Date(); d.setDate(d.getDate() + (days || 1)); d.setHours(18,0,0,0);
+    t.deadline = d.getTime(); t.notified = false; save(); render(); return;
+  }
+  const d = new Date(t.deadline);
+  d.setDate(d.getDate() + (days || 1));
+  t.deadline = d.getTime();
+  t.notified = false; save(); render();
+}
 function toggleDone(id) {
   const t = tasks.find(x => x.id === id); if (!t) return;
   if (!t.done) {
@@ -1170,7 +1186,7 @@ function toggleDone(id) {
         repeat: t.repeat,
         done: false, doneAt: null, notified: false, created: Date.now(), result: '' });
     }
-  } else { t.done=false; t.doneAt=null; t.notified=false; }
+  } else { t.done=false; t.doneAt=null; t.notified=false; t.result = t.result || ''; }
   save(); render();
 }
 function openEditDialog(id) {
