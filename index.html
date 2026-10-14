@@ -26,8 +26,9 @@
   }
   .header-actions button {
     background: #3f3f56; color: #e4e4e7; border: none;
-    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    padding: 8px; border-radius: 8px; font-size: 18px; cursor: pointer;
     transition: background 0.15s;
+    min-width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
   }
   .header-actions button:hover { background: #52527a; }
   .header-actions button.accent { background: #6366f1; color: white; }
@@ -72,6 +73,7 @@
   .tabs {
     display: flex; gap: 4px; margin-bottom: 16px;
     background: #2a2a3c; padding: 4px; border-radius: 10px;
+    position: sticky; top: 0; z-index: 100;
   }
   .tabs button {
     flex: 1; background: transparent; color: #a1a1aa; border: none;
@@ -531,13 +533,13 @@
   <div class="header">
     <h1>Задачник</h1>
     <div class="header-actions">
-      <button id="exportBtn" title="Скачать бэкап JSON">📦 Экспорт</button>
-      <button id="importBtn" title="Загрузить из файла">📥 Импорт</button>
-      <button id="linkAutosaveBtn" title="Привязать файл для автосохранения">🔗 Автосохр.</button>
-      <button id="syncBtn" title="Синхронизация между устройствами (GitHub Gist)">☁ Синхр.</button>
-      <button class="accent" id="dailyReportBtn" style="background:#22c55e">📊 Итог дня</button>
-      <button class="accent" id="addEmpBtn">+ Добавить КМ</button>
-      <button class="warn" id="delEmpBtn" disabled>🗑 Удалить КМ</button>
+      <button id="exportBtn" title="Экспорт JSON" aria-label="Экспорт">📦</button>
+      <button id="importBtn" title="Импорт JSON" aria-label="Импорт">📥</button>
+      <button id="linkAutosaveBtn" title="Автосохранение в файл" aria-label="Автосохранение">🔗</button>
+      <button id="syncBtn" title="Синхронизация (GitHub Gist)" aria-label="Синхронизация">☁</button>
+      <button class="accent" id="dailyReportBtn" title="Итог дня" aria-label="Итог дня" style="background:#22c55e">📊</button>
+      <button class="accent" id="addEmpBtn" title="Добавить КМ" aria-label="Добавить КМ">+</button>
+      <button class="warn" id="delEmpBtn" title="Удалить КМ" aria-label="Удалить КМ" disabled>🗑</button>
       <input type="file" id="importFile" accept=".json" style="display:none">
     </div>
   </div>
@@ -552,6 +554,7 @@
     <button data-tab="tasks" class="active">📋 Задачи</button>
     <button data-tab="time">⏱ Моё время</button>
     <button data-tab="team">👥 Сотрудники</button>
+    <button data-tab="pulse">📊 Срез</button>
   </div>
 
   <div class="tab-panel active" id="panel-tasks">
@@ -664,7 +667,9 @@
     </div>
 
     <div id="timeList"></div>
+  </div>
 
+  <div class="tab-panel" id="panel-pulse">
     <div class="pulse-box" id="pulseBox">
       <div class="pulse-header">
         <h3>📊 Срез дня <span id="pulseDateLabel" style="color:#a1a1aa;font-weight:400;font-size:13px"></span></h3>
@@ -893,7 +898,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 20,
+    version: 21,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -949,6 +954,7 @@ document.querySelectorAll('.tabs button').forEach(btn => {
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'time') { renderWork(); renderPulse(); updateTimerLocks(); }
     if (btn.dataset.tab === 'team') { renderTeam(); renderSessionsHistory(); updateTimerLocks(); }
+    if (btn.dataset.tab === 'pulse') { renderPulse(); }
     updateTopButtons();
   };
 });
