@@ -513,8 +513,15 @@
   .sess-notes {
     font-size: 13px; color: #cbd5e1; margin-top: 8px;
     padding: 8px 10px; background: #1a1a2a; border-radius: 6px;
-    font-style: italic; white-space: pre-wrap; word-break: break-word;
+    white-space: pre-wrap; word-break: break-word;
   }
+  .sess-notes .notes-title { color: #94a3b8; margin-right: 4px; }
+  .sess-notes .os-block { border-left-width: 2px; margin-top: 4px; background: #0f172a;
+    border: 1px solid #2f2f4a; padding: 7px 10px; border-radius: 8px; }
+  .sess-notes .os-block:first-child { margin-top: 0; }
+  .sess-notes .os-block-label { color: #a1a1aa; font-weight: 600; margin-right: 4px; }
+  .sess-notes .os-block-script .os-block-label { color: #a5b4fc; }
+  .sess-notes .os-block-os .os-block-label { color: #4ade80; }
 
   .session-notes-block { margin-top: 12px; }
   .session-notes-block label {
@@ -547,6 +554,19 @@
   .os-group { font-size: 11px; font-weight: 600; color: #818cf8; text-transform: uppercase;
     letter-spacing: .4px; margin: 8px 0 2px; }
   .os-group:first-child { margin-top: 0; }
+  .os-preview { display: flex; flex-direction: column; gap: 6px; max-height: 180px;
+    overflow-y: auto; padding: 8px; border-radius: 8px; background: #0f172a;
+    border: 1px solid #2a2a3e; }
+  .os-block { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px;
+    border-radius: 8px; font-size: 12.5px; line-height: 1.45;
+    border-left: 3px solid #64748b; background: #1a1a2a; }
+  .os-block-script { border-left-color: #6366f1; background: #1c1c33; }
+  .os-block-os { border-left-color: #22c55e; background: #14241b; }
+  .os-block-label { flex: 0 0 auto; font-weight: 700; font-size: 11px;
+    white-space: nowrap; padding-top: 1px; }
+  .os-block-os .os-block-label { color: #4ade80; }
+  .os-block-script .os-block-label { color: #a5b4fc; }
+  .os-block-text { color: #d4d4d8; }
   .os-picker-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .os-picker-actions button { border: none; border-radius: 8px; padding: 9px 16px;
     font-size: 13px; cursor: pointer; }
@@ -746,8 +766,8 @@
           <button id="markOkBtn" title="Есть диалог">✅</button>
           <button id="markFailBtn" title="Отказ или иная причина">❌</button>
         </div>
-        <div style="display:flex;flex:1;gap:6px;align-items:center;flex-wrap:wrap">
-          <input type="text" class="live-input" id="liveOS" placeholder="ОС по звонку..." style="flex:1;min-width:120px">
+        <div style="display:flex;flex:1;gap:6px;align-items:flex-start;flex-wrap:wrap">
+          <textarea class="live-input" id="liveOS" rows="2" placeholder="ОС по звонку..." style="flex:1;min-width:120px;resize:vertical"></textarea>
           <button id="liveOSPicker" title="Развивающая ОС (шаблоны)" style="background:#3f3f56;color:#e4e4e7;border:none;padding:8px 10px;border-radius:8px;cursor:pointer">📋</button>
         </div>
         <button class="action-btn start" id="callStartBtn">▶️ Набор</button>
@@ -2214,7 +2234,8 @@ function renderCallsList() {
 
     const os = document.createElement('span');
     os.className = 'cl-os' + (call.os ? '' : ' empty');
-    os.textContent = call.os || '(нет ОС)';
+    if (call.os) os.innerHTML = renderOSBlocksHTML(call.os);
+    else os.textContent = '(нет ОС)';
     os.title = 'Клик — редактировать';
     os.onclick = () => editCallOS(idx);
 
@@ -2246,13 +2267,49 @@ function renderCallsList() {
   });
 }
 
-function normalizeOS(text) {
-  return String(text || '').replace(/\s+/g, ' ').trim();
+const OS_BLOCK_LABEL = '💬 ОС';
+const SCRIPT_BLOCK_LABEL = '📞 Рекомендую скрипт';
+function splitBlocks(text) {
+  return String(text || '').split('\n').map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
-function addOSpart(base, part) {
-  const b = normalizeOS(base);
-  if (b.includes(part)) return { text: b, added: false };
-  return { text: b ? b + ' ' + part : part, added: true };
+function stripBlockLabel(line) {
+  return line
+    .replace(/^(?:💬?\s*)?ОС\s*:\s*/i, '')
+    .replace(/^(?:📞?\s*)?Рекомендую скрипт\s*:\s*/i, '')
+    .trim();
+}
+function blockKind(line) {
+  if (/^(?:📞\s*)?Рекомендую скрипт\s*:/i.test(line)) return 'script';
+  if (/^(?:💬\s*)?ОС\s*:/i.test(line)) return 'os';
+  return 'plain';
+}
+function normalizeOS(text) {
+  return splitBlocks(text).join('\n');
+}
+function addOSpart(base, part, kind) {
+  const blocks = splitBlocks(base);
+  const raw = String(part || '').replace(/\s+/g, ' ').trim();
+  if (blocks.some(b => stripBlockLabel(b) === raw)) return { text: blocks.join('\n'), added: false };
+  const label = kind === 'script' ? SCRIPT_BLOCK_LABEL : OS_BLOCK_LABEL;
+  blocks.push(label + ': ' + raw);
+  return { text: blocks.join('\n'), added: true };
+}
+function hasOSpart(text, part) {
+  const raw = String(part || '').replace(/\s+/g, ' ').trim();
+  return splitBlocks(text).some(b => stripBlockLabel(b) === raw);
+}
+function renderOSBlocksHTML(text) {
+  return splitBlocks(text).map(b => {
+    const kind = blockKind(b);
+    const body = esc(stripBlockLabel(b));
+    if (kind === 'script') {
+      return `<div class="os-block os-block-script"><span class="os-block-label">${SCRIPT_BLOCK_LABEL}</span><span class="os-block-text">${body}</span></div>`;
+    }
+    if (kind === 'os') {
+      return `<div class="os-block os-block-os"><span class="os-block-label">${OS_BLOCK_LABEL}</span><span class="os-block-text">${body}</span></div>`;
+    }
+    return `<div class="os-block os-block-plain"><span class="os-block-text">${body}</span></div>`;
+  }).join('');
 }
 function openOSTemplates(title, initialValue, onApply, placeholder) {
   const wrap = document.createElement('div');
@@ -2261,6 +2318,7 @@ function openOSTemplates(title, initialValue, onApply, placeholder) {
     <div class="os-picker-box">
       <h3>${title}</h3>
       <textarea id="osPickerText" placeholder="${esc(placeholder || 'Развивающая ОС...')}">${esc(initialValue || '')}</textarea>
+      <div class="os-preview" id="osPickerPreview"></div>
       <div class="os-tabs">
         <button type="button" class="os-tab active" data-ostab="os">💬 Развивающая ОС</button>
         <button type="button" class="os-tab" data-ostab="script">📞 Скрипты звонка</button>
@@ -2274,16 +2332,23 @@ function openOSTemplates(title, initialValue, onApply, placeholder) {
   document.body.appendChild(wrap);
   const text = wrap.querySelector('#osPickerText');
   const chips = wrap.querySelector('#osChips');
+  const preview = wrap.querySelector('#osPickerPreview');
   let activeTab = 'os';
 
+  const renderPreview = () => {
+    const html = renderOSBlocksHTML(text.value);
+    preview.innerHTML = html;
+    preview.style.display = html ? 'flex' : 'none';
+  };
   const addPart = (part) => {
-    const r = addOSpart(text.value, part);
+    const r = addOSpart(text.value, part, activeTab);
     if (!r.added) return;
     text.value = r.text;
     renderChips();
+    renderPreview();
   };
   const chip = (part) => {
-    const used = normalizeOS(text.value).includes(part);
+    const used = hasOSpart(text.value, part);
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'os-chip' + (used ? ' used' : '');
@@ -2315,6 +2380,8 @@ function openOSTemplates(title, initialValue, onApply, placeholder) {
     tb.onclick = () => { activeTab = tb.dataset.ostab; renderChips(); };
   });
   renderChips();
+  renderPreview();
+  text.addEventListener('input', renderPreview);
   wrap.querySelector('.os-picker-cancel').onclick = () => wrap.remove();
   wrap.addEventListener('click', e => { if (e.target === wrap) wrap.remove(); });
   wrap.querySelector('.os-picker-ok').onclick = () => {
@@ -2677,7 +2744,8 @@ function renderSessionsHistory() {
 
         const os = document.createElement('span');
         os.className = 'cl-os' + (call.os ? '' : ' empty');
-        os.textContent = call.os || '(нет ОС)';
+        if (call.os) os.innerHTML = renderOSBlocksHTML(call.os);
+        else os.textContent = '(нет ОС)';
 
         item.appendChild(num);
         item.appendChild(time);
@@ -2691,7 +2759,7 @@ function renderSessionsHistory() {
     if (s.notes && s.notes.trim()) {
       const n = document.createElement('div');
       n.className = 'sess-notes';
-      n.textContent = '📝 ' + s.notes.trim();
+      n.innerHTML = '<span class="notes-title">📝</span> ' + renderOSBlocksHTML(s.notes);
       body.appendChild(n);
     }
 
