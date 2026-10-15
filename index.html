@@ -312,6 +312,19 @@
   .gaps-scroll::-webkit-scrollbar-thumb:hover { background: #52527a; }
   .gaps-scroll { scrollbar-width: thin; scrollbar-color: #3f3f56 transparent; }
 
+  /* ОТСУТСТВИЯ КМ */
+  .abs-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px;
+    background: #23233a; border-radius: 8px; margin-bottom: 6px; font-size: 12.5px; flex-wrap: wrap; }
+  .abs-type { color: #1a1a2a; font-weight: 600; border-radius: 6px; padding: 2px 8px; font-size: 11.5px; white-space: nowrap; }
+  .abs-time { color: #e4e4e7; white-space: nowrap; }
+  .abs-time b { color: #a78bfa; font-weight: 600; }
+  .abs-emp { color: #f59e0b; font-weight: 500; }
+  .abs-note { color: #a1a1aa; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .abs-actions { margin-left: auto; display: flex; gap: 4px; }
+  .abs-actions button { background: #3f3f56; border: none; border-radius: 6px; padding: 4px 7px; cursor: pointer; font-size: 12px; }
+  .abs-actions .abs-del:hover { background: #7f1d1d; }
+  .abs-actions .abs-edit:hover { background: #52527a; }
+
   .time-day {
     background: #2a2a3c; border-radius: 12px; margin-bottom: 12px; overflow: hidden;
   }
@@ -807,10 +820,16 @@
       <button data-etfilter="week">За 7 дней</button>
       <button data-etfilter="month">За месяц</button>
       <button data-etfilter="all">Все записи</button>
+      <button id="addAbsenceBtn" style="background:#f59e0b;color:#1a1a2a;font-weight:600;">🕓 Отметить отсутствие</button>
       <button id="teamReportBtn" style="margin-left:auto;background:#a78bfa;color:white;">📤 Отчёт по команде</button>
     </div>
 
     <div id="empList"></div>
+
+    <div class="sessions-history" id="absencesHistory" style="display:none">
+      <h3>🕓 Отсутствия КМ</h3>
+      <div id="absencesList"></div>
+    </div>
 
     <div class="sessions-history" id="sessionsHistory">
       <h3>📂 История сессий с КМ</h3>
@@ -838,6 +857,7 @@ const KEYS = {
   work: 'tasker_data_v1_work',
   emp: 'tasker_data_v1_emp',
   empWork: 'tasker_data_v1_empwork',
+  absences: 'tasker_data_v1_empabsences',
   timer: 'tasker_data_v1_timer',
   empTimer: 'tasker_data_v1_emptimer',
   meta: 'tasker_data_v1_meta',
@@ -850,6 +870,7 @@ let tasks = JSON.parse(localStorage.getItem(KEYS.tasks) || '[]');
 let workLog = JSON.parse(localStorage.getItem(KEYS.work) || '[]');
 let employees = JSON.parse(localStorage.getItem(KEYS.emp) || '[]');
 let empWorkLog = JSON.parse(localStorage.getItem(KEYS.empWork) || '[]');
+let empAbsences = JSON.parse(localStorage.getItem(KEYS.absences) || '[]');
 let sessions = JSON.parse(localStorage.getItem(KEYS.sessions) || '[]');
 let activeTimer = JSON.parse(localStorage.getItem(KEYS.timer) || 'null');
 let activeEmpTimer = JSON.parse(localStorage.getItem(KEYS.empTimer) || 'null');
@@ -961,6 +982,7 @@ function saveLocalNow() {
     localStorage.setItem(KEYS.work, JSON.stringify(workLog));
     localStorage.setItem(KEYS.emp, JSON.stringify(employees));
     localStorage.setItem(KEYS.empWork, JSON.stringify(empWorkLog));
+    localStorage.setItem(KEYS.absences, JSON.stringify(empAbsences));
     localStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
     localStorage.setItem(KEYS.pulse, JSON.stringify(dailyPulse));
     if (activeTimer) localStorage.setItem(KEYS.timer, JSON.stringify(activeTimer));
@@ -1021,9 +1043,9 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 27,
+    version: 28,
     exported: new Date().toISOString(),
-    tasks, workLog, employees, empWorkLog, sessions, dailyPulse
+    tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
 }
 
@@ -1944,11 +1966,11 @@ function renderWorkRow(w, isEmp, empName) {
   const durH = dur/3600000;
   const durClass = durH > 8 ? 't-dur long' : 't-dur';
   let metaHtml = '';
-  if (isEmp && empName) metaHtml += `<span class="t-emp">👤 ${empName}</span>`;
+  if (isEmp && empName) metaHtml += `<span class="t-emp">👤 ${esc(empName)}</span>`;
   if (isSync) {
     const empSync = employees.find(e => e.id === w.syncEmployeeId);
     const nameSync = empSync ? empSync.name : (w.syncEmployeeName || 'КМ');
-    metaHtml += `<span class="t-sync">🤝 Синхрон с ${nameSync}</span>`;
+    metaHtml += `<span class="t-sync">🤝 Синхрон с ${esc(nameSync)}</span>`;
   }
   const endStr = live ? '— идёт' : w.end;
   metaHtml += `<span class="t-time">🕐 ${w.start} – ${endStr}</span>
@@ -2595,13 +2617,20 @@ function renderTeam() {
   refreshEmpActiveSelect();
   const items = getFilteredEmpWork().sort((a,b) => b.startTs - a.startTs);
   const totalMs = items.reduce((s, w) => s + ((w.endTs || Date.now()) - w.startTs), 0);
+  const absItems = getFilteredAbsences();
+  const absTotalMs = absItems.reduce((s, a) => s + (a.endTs - a.startTs), 0);
   empSummary.innerHTML = `
     <div class="info"><div class="lbl">Всего с КМ</div><div class="big">${fmtDur(totalMs)}</div></div>
     <div class="info"><div class="lbl">Записей</div><div class="big">${items.length}</div></div>
+    <div class="info"><div class="lbl">Отсутствия</div><div class="big ${absItems.length ? 'orange' : ''}">${absItems.length ? fmtDur(absTotalMs) : '—'}</div></div>
     <div class="info"><div class="lbl">КМ</div><div class="big">${employees.length}</div></div>
   `;
   empList.innerHTML = '';
-  if (items.length === 0) { empList.innerHTML = '<div class="empty">Нет записей</div>'; return; }
+  if (items.length === 0) {
+    empList.innerHTML = '<div class="empty">Нет записей</div>';
+    renderAbsencesList();
+    return;
+  }
   const byDate = {};
   items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
   Object.keys(byDate).sort().reverse().forEach(dateStr => {
@@ -2627,6 +2656,7 @@ function renderTeam() {
     dayDiv.appendChild(body);
     empList.appendChild(dayDiv);
   });
+  renderAbsencesList();
 }
 document.getElementById('teamReportBtn').onclick = () => {
   const items = getFilteredEmpWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
@@ -2645,6 +2675,19 @@ document.getElementById('teamReportBtn').onclick = () => {
     report += `  • ${emp ? emp.name : '(удалён)'}: ${fmtDur(ms)}\n`;
   });
   report += '\n';
+  const absItems = getFilteredAbsences();
+  if (absItems.length) {
+    const absTotals = {};
+    absItems.forEach(a => {
+      absTotals[a.employeeId] = (absTotals[a.employeeId] || 0) + (a.endTs - a.startTs);
+    });
+    report += `🕓 ОТСУТСТВИЯ (по КМ):\n`;
+    Object.entries(absTotals).sort((a,b) => b[1] - a[1]).forEach(([empId, ms]) => {
+      const emp = employees.find(e => e.id === parseFloat(empId));
+      report += `  • ${emp ? emp.name : '(удалён)'}: ${fmtDur(ms)}\n`;
+    });
+    report += '\n';
+  }
   const byDate = {};
   items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
   let grand = 0;
@@ -2664,6 +2707,215 @@ document.getElementById('teamReportBtn').onclick = () => {
   report += `${'='.repeat(40)}\nИТОГО: ${fmtDur(grand)}\nЗаписей: ${items.length}\n`;
   showReportModal(report, `team-report-${todayInput()}.txt`);
 };
+
+/* ============================================================
+   ОТСУТСТВИЯ КМ (опоздание / обед / иное)
+============================================================ */
+const ABSENCE_TYPES = {
+  late:  { label: '⏰ Опоздание',       short: 'Опоздание',        color: '#f59e0b' },
+  lunch: { label: '🍽 Обед',            short: 'Обед',             color: '#38bdf8' },
+  leave: { label: '🚶 Ранний уход',     short: 'Ранний уход',      color: '#fb7185' },
+  break: { label: '☕ Отлучка/перерыв', short: 'Отлучка/перерыв',  color: '#a78bfa' },
+  other: { label: '📌 Иное отсутствие', short: 'Иное отсутствие',  color: '#94a3b8' }
+};
+const ABSENCE_TYPE_KEYS = Object.keys(ABSENCE_TYPES);
+
+function dateFromInput(val) {
+  const parts = (val || '').split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+function buildTs(dateStr, timeStr) {
+  const d = dateFromInput(dateStr);
+  const [h, m] = (timeStr || '00:00').split(':').map(Number);
+  d.setHours(h || 0, m || 0, 0, 0);
+  return d.getTime();
+}
+function getFilteredAbsences() {
+  let arr = [...empAbsences];
+  if (empTimeFilter === 'today') {
+    const todayStr = todayInput();
+    arr = arr.filter(a => a.date === todayStr);
+  } else if (empTimeFilter === 'week') {
+    const wa = new Date(); wa.setDate(wa.getDate() - 7); wa.setHours(0, 0, 0, 0);
+    arr = arr.filter(a => a.startTs >= wa.getTime());
+  } else if (empTimeFilter === 'month') {
+    const ma = new Date(); ma.setMonth(ma.getMonth() - 1); ma.setHours(0, 0, 0, 0);
+    arr = arr.filter(a => a.startTs >= ma.getTime());
+  }
+  if (activeEmpFilter !== null) arr = arr.filter(a => a.employeeId === activeEmpFilter);
+  return arr.sort((a, b) => b.startTs - a.startTs);
+}
+function absLabel(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).label; }
+function absColor(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).color; }
+
+function renderAbsencesList() {
+  const wrap = document.getElementById('absencesHistory');
+  const box = document.getElementById('absencesList');
+  if (!wrap || !box) return;
+  const list = getFilteredAbsences();
+  if (!list.length) { wrap.style.display = 'none'; box.innerHTML = ''; return; }
+  wrap.style.display = '';
+  box.innerHTML = '';
+  const byDate = {};
+  list.forEach(a => { (byDate[a.date] = byDate[a.date] || []).push(a); });
+  Object.keys(byDate).sort().reverse().forEach(dateStr => {
+    const dayItems = byDate[dateStr].sort((a, b) => a.startTs - b.startTs);
+    const dayMs = dayItems.reduce((s, a) => s + (a.endTs - a.startTs), 0);
+    const d = dateFromInput(dateStr);
+    const dayLabel = isSameDay(d, new Date()) ? 'Сегодня'
+      : isSameDay(d, new Date(Date.now() - 86400000)) ? 'Вчера'
+      : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    const dayDiv = document.createElement('div');
+    dayDiv.className = 'time-day';
+    const header = document.createElement('div');
+    header.className = 'time-day-header';
+    header.innerHTML = `<span class="day-title">${dayLabel}</span>
+      <span class="day-total">${fmtDur(dayMs)} · ${dayItems.length} ${plural(dayItems.length, 'отметка', 'отметки', 'отметок')}</span>`;
+    dayDiv.appendChild(header);
+    const body = document.createElement('div'); body.className = 'time-day-body';
+    dayItems.forEach(a => {
+      const emp = employees.find(e => e.id === a.employeeId);
+      const row = document.createElement('div');
+      row.className = 'abs-row';
+      const dur = fmtDurShort(a.endTs - a.startTs);
+      row.innerHTML = `
+        <span class="abs-type" style="background:${absColor(a.type)}">${absLabel(a.type)}</span>
+        <span class="abs-time">${a.start}–${a.end} <b>(${dur})</b></span>
+        <span class="abs-emp">${esc(emp ? emp.name : '(удалён)')}</span>
+        ${a.note ? `<span class="abs-note">${esc(a.note)}</span>` : ''}
+        <span class="abs-actions">
+          <button class="abs-edit" title="Изменить">✏️</button>
+          <button class="abs-del" title="Удалить">🗑</button>
+        </span>`;
+      row.querySelector('.abs-edit').onclick = () => openAbsenceEditor(a.id);
+      row.querySelector('.abs-del').onclick = () => {
+        if (confirm(`Удалить отметку «${absLabel(a.type)}» (${emp ? emp.name : '(удалён)'}, ${a.start}–${a.end})?`)) {
+          empAbsences = empAbsences.filter(x => x.id !== a.id);
+          save(); renderTeam();
+        }
+      };
+      body.appendChild(row);
+    });
+    dayDiv.appendChild(body);
+    box.appendChild(dayDiv);
+  });
+}
+
+function openAbsenceEditor(editId) {
+  const editing = editId != null ? empAbsences.find(x => x.id === editId) : null;
+  if (!employees.length) { alert('Сначала добавь КМ в «Сотрудники»'); return; }
+  const empOptions = employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+  const typeOptions = ABSENCE_TYPE_KEYS.map(k => `<option value="${k}">${ABSENCE_TYPES[k].label}</option>`).join('');
+  const defaultEmp = editing ? editing.employeeId
+    : (activeEmpFilter !== null ? activeEmpFilter
+    : (activeEmpCard !== null ? activeEmpCard : employees[0].id));
+  const defaultType = editing ? editing.type : 'lunch';
+  const defaultDate = editing ? editing.date : todayInput();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'os-picker-modal';
+  wrap.innerHTML = `
+    <div class="os-picker-box" style="text-align:left">
+      <h3>${editing ? '✏️ Изменить отсутствие' : '🕓 Отметить отсутствие КМ'}</h3>
+      <div class="form-hint" style="margin:0">Зафиксируй факт, когда КМ не работал: опоздание, обед, ранний уход, отлучка или иное отсутствие.</div>
+      <div class="field-group">
+        <label>КМ</label>
+        <select id="absEmp">${empOptions}</select>
+      </div>
+      <div class="field-group">
+        <label>Тип</label>
+        <select id="absType">${typeOptions}</select>
+      </div>
+      <div class="field-group">
+        <label>Дата</label>
+        <input type="date" id="absDate">
+      </div>
+      <div style="display:flex;gap:8px">
+        <div class="field-group" style="flex:1">
+          <label>Начало</label>
+          <input type="time" id="absStart">
+        </div>
+        <div class="field-group" style="flex:1">
+          <label>Конец</label>
+          <input type="time" id="absEnd">
+        </div>
+      </div>
+      <div class="form-hint" id="absDurHint" style="margin:0"></div>
+      <div class="field-group">
+        <label>Комментарий (необязательно)</label>
+        <input type="text" id="absNote" placeholder="Например: предупредил — опаздываю до 09:20">
+      </div>
+      <div class="os-picker-actions" style="margin-top:4px">
+        <button class="os-picker-cancel" id="absCancel" type="button">Отмена</button>
+        <button class="os-picker-ok" id="absSave" type="button">💾 Сохранить</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const $ = sel => wrap.querySelector(sel);
+  const selEmp = $('#absEmp'), selType = $('#absType'), inpDate = $('#absDate'),
+        inpStart = $('#absStart'), inpEnd = $('#absEnd'), inpNote = $('#absNote'),
+        durHint = $('#absDurHint');
+
+  selEmp.value = defaultEmp;
+  selType.value = defaultType;
+  inpDate.value = defaultDate;
+
+  function fillDefaults() {
+    if (editing) return;
+    const t = selType.value;
+    const now = new Date();
+    const nowHM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const cur = inpDate.value === todayInput() ? nowHM : '00:00';
+    if (t === 'late') { inpStart.value = `${pad(WORK_WINDOW_START)}:00`; inpEnd.value = cur; }
+    else if (t === 'lunch') { inpStart.value = '13:00'; inpEnd.value = '14:00'; }
+    else if (t === 'leave') { inpStart.value = `${pad(WORK_WINDOW_END)}:00`; inpEnd.value = cur; }
+    else { inpStart.value = cur; inpEnd.value = cur; }
+    updateDurHint();
+  }
+  function updateDurHint() {
+    const s = buildTs(inpDate.value, inpStart.value);
+    const e = buildTs(inpDate.value, inpEnd.value);
+    if (e > s) durHint.textContent = `⏱ Длительность: ${fmtDurShort(e - s)}`;
+    else durHint.innerHTML = '<span style="color:#fb7185">⚠️ Время конца должно быть позже начала</span>';
+  }
+  selType.onchange = fillDefaults;
+  inpDate.onchange = updateDurHint;
+  inpStart.onchange = updateDurHint;
+  inpEnd.onchange = updateDurHint;
+
+  function doSave() {
+    const empId = parseFloat(selEmp.value);
+    const date = inpDate.value || todayInput();
+    const start = inpStart.value;
+    const end = inpEnd.value;
+    if (!start || !end) { alert('Укажи начало и конец'); return; }
+    const startTs = buildTs(date, start), endTs = buildTs(date, end);
+    if (endTs <= startTs) { alert('Время конца должно быть позже начала'); return; }
+    const payload = { employeeId: empId, date, type: selType.value, start, end, startTs, endTs, note: inpNote.value.trim() };
+    if (editing) {
+      Object.assign(editing, payload);
+    } else {
+      empAbsences.push({ id: Date.now() + Math.random(), created: Date.now(), ...payload });
+    }
+    save();
+    wrap.remove();
+    renderTeam();
+  }
+  $('#absCancel').onclick = () => wrap.remove();
+  $('#absSave').onclick = doSave;
+  wrap.onclick = e => { if (e.target === wrap) wrap.remove(); };
+
+  fillDefaults();
+  if (editing) {
+    inpStart.value = editing.start;
+    inpEnd.value = editing.end;
+    inpNote.value = editing.note || '';
+    updateDurHint();
+  }
+}
+
+document.getElementById('addAbsenceBtn').onclick = () => openAbsenceEditor();
 
 /* ============================================================
    ИСТОРИЯ СЕССИЙ
@@ -3380,6 +3632,7 @@ function sanitizeImported(data) {
     workLog: asArr(data.workLog),
     employees: asArr(data.employees),
     empWorkLog: asArr(data.empWorkLog),
+    empAbsences: asArr(data.empAbsences),
     sessions: cleanSessions,
     dailyPulse: asObj(data.dailyPulse)
   };
@@ -3398,9 +3651,10 @@ document.getElementById('importFile').onchange = (e) => {
 
     if (looksLikeBackup) {
       const clean = sanitizeImported(data);
-      if (confirm(`Импортировать:\n• ${clean.tasks.length} задач\n• ${clean.workLog.length} записей моего времени\n• ${clean.employees.length} КМ\n• ${clean.empWorkLog.length} записей времени КМ\n• ${clean.sessions.length} сессий\n\n⚠️ Текущие данные будут заменены!`)) {
+      if (confirm(`Импортировать:\n• ${clean.tasks.length} задач\n• ${clean.workLog.length} записей моего времени\n• ${clean.employees.length} КМ\n• ${clean.empWorkLog.length} записей времени КМ\n• ${clean.empAbsences.length} отметок отсутствия\n• ${clean.sessions.length} сессий\n\n⚠️ Текущие данные будут заменены!`)) {
         tasks = clean.tasks; workLog = clean.workLog; employees = clean.employees;
-        empWorkLog = clean.empWorkLog; sessions = clean.sessions; dailyPulse = clean.dailyPulse;
+        empWorkLog = clean.empWorkLog; empAbsences = clean.empAbsences;
+        sessions = clean.sessions; dailyPulse = clean.dailyPulse;
         activeEmpTimer = null; activeTimer = null;
         flushSave();
         render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory();
@@ -3431,7 +3685,7 @@ function saveSyncState() {
 }
 function hasAnyData() {
   return tasks.length > 0 || workLog.length > 0 || employees.length > 0 || empWorkLog.length > 0 ||
-    sessions.length > 0 || Object.keys(dailyPulse).length > 0;
+    empAbsences.length > 0 || sessions.length > 0 || Object.keys(dailyPulse).length > 0;
 }
 function gistHeaders() {
   return { Authorization: 'Bearer ' + syncState.token, Accept: 'application/vnd.github+json' };
@@ -3442,7 +3696,8 @@ function cloudContent() {
 function applyRemote(remote) {
   const clean = sanitizeImported(remote);
   tasks = clean.tasks; workLog = clean.workLog; employees = clean.employees;
-  empWorkLog = clean.empWorkLog; sessions = clean.sessions; dailyPulse = clean.dailyPulse;
+  empWorkLog = clean.empWorkLog; empAbsences = clean.empAbsences;
+  sessions = clean.sessions; dailyPulse = clean.dailyPulse;
   activeEmpTimer = null; activeTimer = null;
   flushSave();
   render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory();
@@ -3638,7 +3893,7 @@ function updateBackupBanner() {
   if (!banner) return;
   const lastExport = meta.lastExport || 0;
   const daysSince = (Date.now() - lastExport) / 86400000;
-  const hasData = tasks.length > 0 || workLog.length > 0 || employees.length > 0 || empWorkLog.length > 0 || sessions.length > 0;
+  const hasData = tasks.length > 0 || workLog.length > 0 || employees.length > 0 || empWorkLog.length > 0 || empAbsences.length > 0 || sessions.length > 0;
   if (!hasData) { banner.classList.remove('show'); return; }
   if (daysSince >= 1) {
     banner.classList.add('show');
