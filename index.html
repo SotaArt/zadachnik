@@ -488,6 +488,31 @@
     font-size: 15px; margin-bottom: 10px; color: #a1a1aa;
     display: flex; align-items: center; gap: 8px;
   }
+
+  /* Верхняя карточка раздела «Сотрудники» */
+  .team-top {
+    background: #2a2a3c; padding: 14px; border-radius: 12px;
+    margin-bottom: 14px; border-left: 3px solid #a78bfa;
+  }
+  .team-top .emp-picker { background: transparent; padding: 0; margin-bottom: 10px; }
+  .team-top .time-summary { background: transparent; padding: 0; margin-bottom: 0; }
+
+  /* Аккордеоны раздела «Сотрудники» */
+  .team-acc {
+    background: #2a2a3c; border-radius: 12px; margin-bottom: 12px;
+    overflow: hidden; border-left: 3px solid #6366f1;
+  }
+  .team-acc-header {
+    padding: 14px; display: flex; gap: 10px; align-items: center;
+    justify-content: space-between; cursor: pointer; user-select: none;
+    font-size: 15px; color: #e4e4e7; transition: background 0.15s;
+  }
+  .team-acc-header:hover { background: #34344e; }
+  .team-acc-header .arrow { color: #a1a1aa; font-size: 12px; margin-left: 6px; transition: transform 0.2s; display: inline-block; }
+  .team-acc:not(.collapsed) .team-acc-header .arrow { transform: rotate(180deg); }
+  .team-acc-sub { font-size: 12px; color: #a1a1aa; white-space: nowrap; }
+  .team-acc-body { padding: 0 14px 14px; }
+  .team-acc.collapsed .team-acc-body { display: none; }
   .session-accordion {
     background: #23233a; border-radius: 10px; margin-bottom: 8px;
     overflow: hidden; border-left: 3px solid #10b981;
@@ -671,6 +696,17 @@
   </div>
 
   <div class="tab-panel" id="panel-time">
+    <div class="team-top" style="border-left-color:#22c55e">
+      <div class="time-summary" id="timeSummary"></div>
+      <div class="filters" style="margin:10px 0 0">
+        <button data-tfilter="today" class="active">Сегодня</button>
+        <button data-tfilter="week">7 дней</button>
+        <button data-tfilter="month">Месяц</button>
+        <button data-tfilter="all">Всего</button>
+        <button id="reportBtn" style="margin-left:auto;background:#22c55e;color:white;">📤 Отчёт по мне</button>
+      </div>
+    </div>
+
     <div class="lock-notice" id="myLockNotice">
       ⏸ Твой таймер сейчас неактивен: идёт сессия с КМ. Останови её, чтобы запустить свой.
     </div>
@@ -716,15 +752,6 @@
       <button class="primary" id="addWorkBtn">✓ Зафиксировать</button>
     </div>
 
-    <div class="time-summary" id="timeSummary"></div>
-
-    <div class="filters">
-      <button data-tfilter="today" class="active">Сегодня</button>
-      <button data-tfilter="week">За 7 дней</button>
-      <button data-tfilter="all">Все записи</button>
-      <button id="reportBtn" style="margin-left:auto;background:#22c55e;color:white;">📤 Отчёт по мне</button>
-    </div>
-
     <div id="timeList"></div>
   </div>
 
@@ -746,11 +773,20 @@
 
   <div class="tab-panel" id="panel-team">
 
-    <div class="emp-picker">
-      <label>👥 КМ:</label>
-      <select id="empActiveSelect">
-        <option value="">— выбери КМ —</option>
-      </select>
+    <div class="team-top">
+      <div class="emp-picker" style="margin-bottom:10px">
+        <label>👥 КМ:</label>
+        <select id="empActiveSelect">
+          <option value="">— выбери КМ —</option>
+        </select>
+      </div>
+      <div class="time-summary" id="empSummary"></div>
+      <div class="filters" style="margin:10px 0 0">
+        <button data-etfilter="today" class="active">Сегодня</button>
+        <button data-etfilter="week">7 дней</button>
+        <button data-etfilter="month">Месяц</button>
+        <button data-etfilter="all">Всего</button>
+      </div>
     </div>
 
     <div class="lock-notice" id="empLockNotice">
@@ -769,6 +805,13 @@
         <button class="stop" id="empTimerStopBtn" style="display:none">■ Завершить сессию</button>
       </div>
       <div class="session-info" id="sessionInfo" style="display:none"></div>
+      <div class="field-group" style="flex-basis:100%;margin-top:6px">
+        <label>🎧 Тема / цель сессии</label>
+        <input type="text" id="sessionTopic" placeholder="Например: обзвон базы октября" autocomplete="off">
+        <div class="form-hint" style="margin:0">
+          ⓘ Кнопка ▶ Старт запускает сессию и одновременно — мой таймер с пометкой «Работа с ...»
+        </div>
+      </div>
     </div>
 
     <div class="calls-panel" id="callsPanel">
@@ -803,37 +846,39 @@
       </div>
     </div>
 
-    <div class="add-box" id="sessionStartBox">
-      <div class="field-group">
-        <label>🎧 Тема / цель сессии</label>
-        <input type="text" id="sessionTopic" placeholder="Например: обзвон базы октября" autocomplete="off">
-      </div>
-      <div class="form-hint">
-        ⓘ Кнопка ▶ Старт запускает сессию и одновременно — мой таймер с пометкой «Работа с ...»
-      </div>
-    </div>
-
-    <div class="time-summary" id="empSummary"></div>
-
-    <div class="filters">
-      <button data-etfilter="today" class="active">Сегодня</button>
-      <button data-etfilter="week">За 7 дней</button>
-      <button data-etfilter="month">За месяц</button>
-      <button data-etfilter="all">Все записи</button>
+    <div class="filters" id="teamActionRow">
       <button id="addAbsenceBtn" style="background:#f59e0b;color:#1a1a2a;font-weight:600;">🕓 Отметить отсутствие</button>
-      <button id="teamReportBtn" style="margin-left:auto;background:#a78bfa;color:white;">📤 Отчёт по команде</button>
+      <button id="teamReportBtn" style="background:#a78bfa;color:white;">📤 Отчёт по команде</button>
     </div>
 
-    <div id="empList"></div>
-
-    <div class="sessions-history" id="absencesHistory" style="display:none">
-      <h3>🕓 Отсутствия КМ</h3>
-      <div id="absencesList"></div>
+    <div class="team-acc collapsed" id="empListAcc">
+      <div class="team-acc-header">
+        <span>📊 <span id="empListAccTitle">Сегодня</span> <span class="arrow">▼</span></span>
+        <span class="team-acc-sub" id="empListAccSub"></span>
+      </div>
+      <div class="team-acc-body">
+        <div id="empList"></div>
+      </div>
     </div>
 
-    <div class="sessions-history" id="sessionsHistory">
-      <h3>📂 История сессий с КМ</h3>
-      <div id="sessionsList"></div>
+    <div class="team-acc collapsed" id="absencesAcc" style="display:none">
+      <div class="team-acc-header">
+        <span>🕓 Отсутствия КМ <span class="arrow">▼</span></span>
+        <span class="team-acc-sub" id="absencesAccSub"></span>
+      </div>
+      <div class="team-acc-body">
+        <div id="absencesList"></div>
+      </div>
+    </div>
+
+    <div class="team-acc collapsed" id="sessionsAcc">
+      <div class="team-acc-header">
+        <span>📂 История сессий с КМ <span class="arrow">▼</span></span>
+        <span class="team-acc-sub" id="sessionsAccSub"></span>
+      </div>
+      <div class="team-acc-body">
+        <div id="sessionsList"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -882,6 +927,8 @@ let syncState = JSON.parse(localStorage.getItem(KEYS.sync)) ||
 let filter = 'active';
 let timeFilter = 'today';
 let empTimeFilter = 'today';
+const EMP_PERIOD_LABELS = { today: 'Сегодня', week: '7 дней', month: 'Месяц', all: 'Всего' };
+const MY_PERIOD_LABELS = { today: 'Сегодня', week: '7 дней', month: 'Месяц', all: 'Всего' };
 let searchQuery = '';
 let activeEmpFilter = null;
 let activeEmpCard = null;
@@ -1043,7 +1090,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 28,
+    version: 29,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -1549,12 +1596,18 @@ document.querySelectorAll('.filters button[data-etfilter]').forEach(btn => {
     renderSessionsHistory();
   };
 });
+document.querySelectorAll('.team-acc-header').forEach(h => {
+  h.onclick = () => h.parentElement.classList.toggle('collapsed');
+});
 function getFilteredWork() {
   let arr = [...workLog];
   if (timeFilter === 'today') arr = arr.filter(w => w.date === todayInput());
   else if (timeFilter === 'week') {
     const wa = new Date(); wa.setDate(wa.getDate()-7); wa.setHours(0,0,0,0);
     arr = arr.filter(w => w.startTs >= wa.getTime());
+  } else if (timeFilter === 'month') {
+    const ma = new Date(); ma.setMonth(ma.getMonth()-1); ma.setHours(0,0,0,0);
+    arr = arr.filter(w => w.startTs >= ma.getTime());
   }
   return arr;
 }
@@ -1703,6 +1756,21 @@ function calcPulseTotals(items) {
   return { planSum, factSum, hasPlan, hasFact };
 }
 
+function getRecentPulseLabels(dateStr) {
+  const base = new Date(dateStr + 'T00:00:00');
+  const labels = [];
+  const seen = new Set();
+  for (let back = 1; back <= 2; back++) {
+    const d = new Date(base); d.setDate(d.getDate() - back);
+    const ds = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    (dailyPulse[ds] || []).forEach(it => {
+      const l = (it.label || '').trim();
+      if (l && !seen.has(l)) { seen.add(l); labels.push(l); }
+    });
+  }
+  return labels;
+}
+
 function renderPulse() {
   const list = document.getElementById('pulseList');
   const hint = document.getElementById('pulseHint');
@@ -1710,7 +1778,18 @@ function renderPulse() {
   if (!list) return;
 
   const dateStr = todayInput();
-  const items = getPulseForDate(dateStr);
+  let items = getPulseForDate(dateStr);
+
+  if (items.length === 0 && meta.pulseSeedDate !== dateStr) {
+    const seed = getRecentPulseLabels(dateStr);
+    if (seed.length) {
+      dailyPulse[dateStr] = seed.map(l => ({ label: l, plan: '', fact: '' }));
+      items = dailyPulse[dateStr];
+      save();
+    }
+    meta.pulseSeedDate = dateStr;
+    save();
+  }
 
   if (label) {
     const d = new Date(dateStr + 'T00:00:00');
@@ -1864,7 +1943,7 @@ function renderWork() {
     if (allGaps.length > 0) {
       const preview = allGaps.map((g, i) => {
         const d = new Date(g.s);
-        const dateOnly = (timeFilter === 'week' || timeFilter === 'all')
+        const dateOnly = (timeFilter === 'week' || timeFilter === 'month' || timeFilter === 'all')
           ? `${pad(d.getDate())}.${pad(d.getMonth()+1)} ` : '';
         return `<div class="gap-line" data-gap-i="${i}" style="font-size:12px;color:#fbbf24;line-height:1.6;padding:4px 6px;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px" onmouseover="this.style.background='#2a2a3c'" onmouseout="this.style.background='transparent'">
           <span>${dateOnly}${formatTimeShort(g.s)} – ${formatTimeShort(g.e)} <span style="color:#71717a">(${fmtDurShort(g.e - g.s)})</span></span>
@@ -2040,7 +2119,8 @@ document.getElementById('reportBtn').onclick = () => {
   const items = getFilteredWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
   if (!items.length) { alert('Нет завершённых записей'); return; }
   const period = timeFilter === 'today' ? 'Сегодня ' + todayInput()
-               : timeFilter === 'week' ? 'Последние 7 дней' : 'Все записи';
+               : timeFilter === 'week' ? 'Последние 7 дней'
+               : timeFilter === 'month' ? 'Последний месяц' : 'Все записи';
   let report = `📋 ОТЧЁТ О РАБОТЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
   const byDate = {};
   items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
@@ -2625,6 +2705,10 @@ function renderTeam() {
     <div class="info"><div class="lbl">Отсутствия</div><div class="big ${absItems.length ? 'orange' : ''}">${absItems.length ? fmtDur(absTotalMs) : '—'}</div></div>
     <div class="info"><div class="lbl">КМ</div><div class="big">${employees.length}</div></div>
   `;
+  const accTitle = document.getElementById('empListAccTitle');
+  if (accTitle) accTitle.textContent = EMP_PERIOD_LABELS[empTimeFilter] || 'Сегодня';
+  const accSub = document.getElementById('empListAccSub');
+  if (accSub) accSub.textContent = `${items.length} ${plural(items.length,'запись','записи','записей')} · ${fmtDur(totalMs)}`;
   empList.innerHTML = '';
   if (items.length === 0) {
     empList.innerHTML = '<div class="empty">Нет записей</div>';
@@ -2662,7 +2746,8 @@ document.getElementById('teamReportBtn').onclick = () => {
   const items = getFilteredEmpWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
   if (!items.length) { alert('Нет завершённых записей'); return; }
   const period = empTimeFilter === 'today' ? 'Сегодня ' + todayInput()
-               : empTimeFilter === 'week' ? 'Последние 7 дней' : 'Все записи';
+               : empTimeFilter === 'week' ? 'Последние 7 дней'
+               : empTimeFilter === 'month' ? 'Последний месяц' : 'Все записи';
   let report = `👥 ОТЧЁТ ПО КОМАНДЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
   const empTotals = {};
   items.forEach(w => {
@@ -2749,12 +2834,14 @@ function absLabel(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).la
 function absColor(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).color; }
 
 function renderAbsencesList() {
-  const wrap = document.getElementById('absencesHistory');
+  const wrap = document.getElementById('absencesAcc');
   const box = document.getElementById('absencesList');
+  const sub = document.getElementById('absencesAccSub');
   if (!wrap || !box) return;
   const list = getFilteredAbsences();
-  if (!list.length) { wrap.style.display = 'none'; box.innerHTML = ''; return; }
+  if (!list.length) { wrap.style.display = 'none'; box.innerHTML = ''; if (sub) sub.textContent = ''; return; }
   wrap.style.display = '';
+  if (sub) sub.textContent = `${list.length} ${plural(list.length, 'отметка', 'отметки', 'отметок')}`;
   box.innerHTML = '';
   const byDate = {};
   list.forEach(a => { (byDate[a.date] = byDate[a.date] || []).push(a); });
@@ -2939,6 +3026,8 @@ function renderSessionsHistory() {
     const ma = new Date(); ma.setMonth(ma.getMonth()-1); ma.setHours(0,0,0,0);
     list = list.filter(s => s.startTs >= ma.getTime());
   }
+  const sub = document.getElementById('sessionsAccSub');
+  if (sub) sub.textContent = list.length ? `${list.length} ${plural(list.length, 'сессия', 'сессии', 'сессий')}` : '';
   if (list.length === 0) {
     box.innerHTML = '<div class="empty" style="padding:20px 0;font-size:13px">Пока нет завершённых сессий</div>';
     return;
