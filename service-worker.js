@@ -1,4 +1,4 @@
-const CACHE = 'tasker-v29';
+const CACHE = 'tasker-v30';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (event) => {

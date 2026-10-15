@@ -1090,7 +1090,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 29,
+    version: 30,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -2121,25 +2121,40 @@ document.getElementById('reportBtn').onclick = () => {
   const period = timeFilter === 'today' ? 'Сегодня ' + todayInput()
                : timeFilter === 'week' ? 'Последние 7 дней'
                : timeFilter === 'month' ? 'Последний месяц' : 'Все записи';
-  let report = `📋 ОТЧЁТ О РАБОТЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
+  let report = `📋 ОТЧЁТ О МОЕЙ РАБОТЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(60)}\n\n`;
+
+  const grandTotal = items.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+  const syncTotal = items.filter(w => w.syncEmployeeId).reduce((s, w) => s + (w.endTs - w.startTs), 0);
+
   const byDate = {};
   items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
-  let grand = 0;
   Object.keys(byDate).sort().forEach(dateStr => {
-    const dayItems = byDate[dateStr];
+    const dayItems = byDate[dateStr].sort((a,b) => a.startTs - b.startTs);
     const dayTotal = dayItems.reduce((s,w) => s + (w.endTs - w.startTs), 0);
-    grand += dayTotal;
     const d = new Date(dateStr + 'T00:00:00');
-    report += `📅 ${d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}  —  ${fmtDur(dayTotal)}\n${'-'.repeat(40)}\n`;
+    report += `📅 ${d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}  —  ${fmtDur(dayTotal)}\n${'-'.repeat(60)}\n`;
     dayItems.forEach((w,i) => {
       const dur = fmtDurShort(w.endTs - w.startTs);
-      const syncTag = w.syncEmployeeId ? `  🤝 синхрон с ${(employees.find(e=>e.id===w.syncEmployeeId)||{}).name || w.syncEmployeeName || 'КМ'}` : '';
-      report += `${i+1}. ${w.start}–${w.end} (${dur})${syncTag}\n   ${w.text}\n`;
+      const syncTag = w.syncEmployeeId ? `  🤝 с ${(employees.find(e=>e.id===w.syncEmployeeId)||{}).name || w.syncEmployeeName || 'КМ'}` : '';
+      report += `${String(i+1).padStart(2)}. ${w.start}–${w.end} (${dur})${syncTag}\n    ${w.text}\n`;
     });
+    const dayGaps = calcUnaccountedGaps(dayItems, dateStr);
+    if (dayGaps.length) {
+      const gapMs = dayGaps.reduce((s, g) => s + (g[1] - g[0]), 0);
+      report += `    ⚠️ Не учтено в рабочем окне: ${fmtDur(gapMs)}\n`;
+      dayGaps.forEach(g => { report += `       ${formatTimeShort(g[0])} – ${formatTimeShort(g[1])} (${fmtDurShort(g[1] - g[0])})\n`; });
+    } else {
+      report += `    ✓ Рабочее окно покрыто записями\n`;
+    }
     report += '\n';
   });
-  report += `${'='.repeat(40)}\nИТОГО: ${fmtDur(grand)} за ${Object.keys(byDate).length} ${plural(Object.keys(byDate).length,'день','дня','дней')}\nЗаписей: ${items.length}\n`;
-  showReportModal(report, `work-report-${todayInput()}.txt`);
+
+  report += `${'='.repeat(60)}\n📊 ИТОГИ ПО МНЕ:\n`;
+  report += `  • Всего отработано: ${fmtDur(grandTotal)}\n`;
+  report += `  • В сессиях с КМ: ${fmtDur(syncTotal)}\n`;
+  report += `  • Самостоятельно: ${fmtDur(grandTotal - syncTotal)}\n`;
+  report += `  • Записей: ${items.length} за ${Object.keys(byDate).length} ${plural(Object.keys(byDate).length,'день','дня','дней')}\n`;
+  showReportModal(report, `my-report-${todayInput()}.txt`);
 };
 function showReportModal(report, filename) {
   const wrap = document.createElement('div');
@@ -2744,52 +2759,171 @@ function renderTeam() {
 }
 document.getElementById('teamReportBtn').onclick = () => {
   const items = getFilteredEmpWork().filter(w => w.endTs).sort((a,b) => a.startTs - b.startTs);
-  if (!items.length) { alert('Нет завершённых записей'); return; }
+  const absItems = getFilteredAbsences();
+  const sessItems = getFilteredSessions();
+  if (!items.length && !absItems.length && !sessItems.length) { alert('Нет данных за выбранный период'); return; }
+
   const period = empTimeFilter === 'today' ? 'Сегодня ' + todayInput()
                : empTimeFilter === 'week' ? 'Последние 7 дней'
                : empTimeFilter === 'month' ? 'Последний месяц' : 'Все записи';
-  let report = `👥 ОТЧЁТ ПО КОМАНДЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(40)}\n\n`;
-  const empTotals = {};
-  items.forEach(w => {
-    if (!empTotals[w.employeeId]) empTotals[w.employeeId] = 0;
-    empTotals[w.employeeId] += w.endTs - w.startTs;
+  const refDate = empTimeFilter === 'today' ? todayInput() : todayInput();
+  const deadline = dayAfterRu(refDate);
+
+  let report = `👥 ОТЧЁТ ПО КОМАНДЕ\nПериод: ${period}\nДата отчёта: ${formatDate(new Date())}\n${'='.repeat(60)}\n\n`;
+
+  const allEmpIds = [...new Set([
+    ...items.map(w => w.employeeId),
+    ...absItems.map(a => a.employeeId),
+    ...sessItems.map(s => s.employeeId)
+  ])];
+
+  /* ---- СВОДКА ---- */
+  report += `📊 СВОДКА ПО КМ:\n`;
+  report += `${'-'.repeat(60)}\n`;
+  allEmpIds.forEach(empId => {
+    const emp = employees.find(e => e.id === empId);
+    const empName = emp ? emp.name : '(удалён)';
+    const ms = items.filter(w => w.employeeId === empId).reduce((s, w) => s + (w.endTs - w.startTs), 0);
+    const absMs = absItems.filter(a => a.employeeId === empId).reduce((s, a) => s + (a.endTs - a.startTs), 0);
+    const empSess = sessItems.filter(s => s.employeeId === empId);
+    const calls = empSess.flatMap(s => s.calls);
+    const ok = calls.filter(c => c.mark === 'ok').length;
+    const remarks = collectAbsenceRemarks(absItems.filter(a => a.employeeId === empId));
+    report += `  • ${empName}: ${fmtDur(ms)}`;
+    if (absMs > 0) report += `, отсутствия ${fmtDur(absMs)}`;
+    report += `, сессий ${empSess.length}, звонков ${calls.length} (✅ ${ok})`;
+    if (remarks.length) report += `, ⚠️ замечаний ${remarks.length}`;
+    report += `\n`;
   });
-  report += `📊 СВОДКА:\n`;
-  Object.entries(empTotals).sort((a,b) => b[1] - a[1]).forEach(([empId, ms]) => {
-    const emp = employees.find(e => e.id === parseFloat(empId));
-    report += `  • ${emp ? emp.name : '(удалён)'}: ${fmtDur(ms)}\n`;
+  report += `\n`;
+
+  /* ---- РАЗБИВКА ПО КАЖДОМУ КМ ---- */
+  allEmpIds.forEach(empId => {
+    const emp = employees.find(e => e.id === empId);
+    const empName = emp ? emp.name : '(удалён)';
+    const empLogs = items.filter(w => w.employeeId === empId);
+    const empAbs = absItems.filter(a => a.employeeId === empId).sort((a, b) => a.startTs - b.startTs);
+    const empSess = sessItems.filter(s => s.employeeId === empId);
+    const empTotalMs = empLogs.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+    const allCalls = empSess.flatMap(s => s.calls);
+    const okCalls = allCalls.filter(c => c.mark === 'ok').length;
+    const failCalls = allCalls.filter(c => c.mark === 'fail').length;
+    const callMs = allCalls.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+    const conv = allCalls.length > 0 ? Math.round(okCalls / allCalls.length * 100) : 0;
+    const empRemarks = collectAbsenceRemarks(empAbs);
+
+    report += `${'='.repeat(60)}\n`;
+    report += `👤 ${empName.toUpperCase()}\n`;
+    report += `${'-'.repeat(60)}\n`;
+    report += `⏱ Время работы: ${fmtDur(empTotalMs)}\n`;
+    report += `🎧 Сессий: ${empSess.length}   📞 Звонков: ${allCalls.length} (✅ ${okCalls}, ❌ ${failCalls})`;
+    if (allCalls.length) report += `   Конверсия: ${conv}%   В звонках: ${fmtDurCall(callMs)}`;
+    report += `\n\n`;
+
+    /* Записи времени */
+    if (empLogs.length) {
+      report += `  ⏱ Записи времени:\n`;
+      empLogs.forEach((w, i) => {
+        report += `    ${i+1}. ${fmtDateRu(w.date)}, ${w.start}–${w.end} (${fmtDurShort(w.endTs - w.startTs)}) — ${w.text}\n`;
+      });
+      report += `\n`;
+    }
+
+    /* Сессии со всей ОС и скриптами */
+    if (empSess.length) {
+      report += `  🎧 Сессии и ОС:\n`;
+      empSess.forEach((s, si) => {
+        report += `    Сессия ${si+1}: ${fmtDateRu(`${new Date(s.startTs).getFullYear()}-${pad(new Date(s.startTs).getMonth()+1)}-${pad(new Date(s.startTs).getDate())}`)}, ${formatTimeShort(s.startTs)}–${formatTimeShort(s.endTs)} (${fmtDur(s.endTs - s.startTs)})\n`;
+        if (s.topic) report += `      Тема: ${s.topic}\n`;
+        if (s.calls.length === 0) {
+          report += `      Звонков не было\n`;
+        } else {
+          s.calls.forEach((c, ci) => {
+            const mark = c.mark === 'ok' ? '✅ есть диалог' : c.mark === 'fail' ? '❌ отказ/другое' : '⚪ без метки';
+            report += `      ${String(ci+1).padStart(2)}. ${formatTimeShort(c.startTs)}–${formatTimeShort(c.endTs)} (${fmtDurCall(c.endTs - c.startTs)}) ${mark}\n`;
+            if (c.os) {
+              splitBlocks(c.os).forEach(line => {
+                const kind = blockKind(line);
+                const body = stripBlockLabel(line);
+                const tag = kind === 'script' ? '📞 Рекомендую скрипт: ' : kind === 'os' ? '💬 ОС: ' : '';
+                report += `          ${tag}${body}\n`;
+              });
+            }
+          });
+        }
+        if (s.notes && s.notes.trim()) {
+          report += `      📝 ОС по сессии:\n`;
+          splitBlocks(s.notes).forEach(line => {
+            const kind = blockKind(line);
+            const body = stripBlockLabel(line);
+            const tag = kind === 'script' ? '📞 Рекомендую скрипт: ' : kind === 'os' ? '💬 ОС: ' : '';
+            report += `         ${tag}${body}\n`;
+          });
+        }
+        report += `\n`;
+      });
+    }
+
+    /* Рекомендованные скрипты (сводно) */
+    const scripts = [];
+    empSess.forEach(s => {
+      s.calls.forEach(c => extractScripts(c.os).forEach(x => scripts.push(x)));
+      extractScripts(s.notes).forEach(x => scripts.push(x));
+    });
+    if (scripts.length) {
+      report += `  📞 Рекомендованные скрипты:\n`;
+      [...new Set(scripts)].forEach((sc, i) => { report += `    ${i+1}. ${sc}\n`; });
+      report += `\n`;
+    }
+
+    /* Отсутствия */
+    if (empAbs.length) {
+      report += `  🕓 Отсутствия:\n`;
+      empAbs.forEach(a => {
+        report += `    • ${fmtDateRu(a.date)}, ${a.start}–${a.end} (${fmtDurShort(a.endTs - a.startTs)}) — ${absLabel(a.type)}`;
+        if (a.note) report += ` — ${a.note}`;
+        report += `\n`;
+      });
+      report += `\n`;
+    }
+
+    /* Замечания */
+    if (empRemarks.length) {
+      report += `  ⚠️ ЗАМЕЧАНИЯ:\n`;
+      empRemarks.forEach(r => {
+        report += `    ❗ ${fmtDateRu(r.absence.date)}: ${r.text}\n`;
+      });
+      report += `\n`;
+    }
+
+    /* Запросы объяснительных / пояснений */
+    const needExpl = empRemarks.filter(r => r.needExplanation);
+    if (needExpl.length) {
+      report += `  ✉️ ТРЕБУЕТСЯ ОБЪЯСНИТЕЛЬНАЯ / ПОЯСНЕНИЕ (на имя НО):\n`;
+      needExpl.forEach(r => {
+        const a = r.absence;
+        if (r.code === 'late') {
+          report += `    • Опоздание ${fmtDateRu(a.date)} (${a.start}–${a.end}, ${fmtDurShort(a.endTs - a.startTs)}).\n`;
+          report += `      Прошу предоставить объяснительную записку на имя НО о причине опоздания.\n`;
+          report += `      Срок предоставления: до ${deadline}.\n`;
+        } else {
+          report += `    • Отсутствие ${fmtDateRu(a.date)} (${a.start}–${a.end}, ${fmtDurShort(a.endTs - a.startTs)}, ${absLabel(a.type)}).\n`;
+          report += `      Прошу пояснить причину отсутствия.\n`;
+          report += `      Срок предоставления: до ${deadline}.\n`;
+        }
+      });
+      report += `\n`;
+    }
   });
-  report += '\n';
-  const absItems = getFilteredAbsences();
-  if (absItems.length) {
-    const absTotals = {};
-    absItems.forEach(a => {
-      absTotals[a.employeeId] = (absTotals[a.employeeId] || 0) + (a.endTs - a.startTs);
-    });
-    report += `🕓 ОТСУТСТВИЯ (по КМ):\n`;
-    Object.entries(absTotals).sort((a,b) => b[1] - a[1]).forEach(([empId, ms]) => {
-      const emp = employees.find(e => e.id === parseFloat(empId));
-      report += `  • ${emp ? emp.name : '(удалён)'}: ${fmtDur(ms)}\n`;
-    });
-    report += '\n';
+
+  /* ---- ИТОГО + ЗАМЕЧАНИЯ СВОДНО ---- */
+  const grand = items.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+  const allRemarks = collectAbsenceRemarks(absItems);
+  report += `${'='.repeat(60)}\n`;
+  report += `ИТОГО по команде: ${fmtDur(grand)} | записей ${items.length} | отсутствий ${absItems.length} | сессий ${sessItems.length}\n`;
+  if (allRemarks.length) {
+    report += `⚠️ Всего замечаний: ${allRemarks.length}, из них требуют объяснения: ${allRemarks.filter(r => r.needExplanation).length}\n`;
   }
-  const byDate = {};
-  items.forEach(w => { (byDate[w.date] = byDate[w.date] || []).push(w); });
-  let grand = 0;
-  Object.keys(byDate).sort().forEach(dateStr => {
-    const dayItems = byDate[dateStr];
-    const dayTotal = dayItems.reduce((s,w) => s + (w.endTs - w.startTs), 0);
-    grand += dayTotal;
-    const d = new Date(dateStr + 'T00:00:00');
-    report += `📅 ${d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}  —  ${fmtDur(dayTotal)}\n${'-'.repeat(40)}\n`;
-    dayItems.forEach((w, i) => {
-      const emp = employees.find(e => e.id === w.employeeId);
-      const dur = fmtDurShort(w.endTs - w.startTs);
-      report += `${i+1}. ${w.start}–${w.end} (${dur})  👤 ${emp ? emp.name : '(удалён)'}\n   ${w.text}\n`;
-    });
-    report += '\n';
-  });
-  report += `${'='.repeat(40)}\nИТОГО: ${fmtDur(grand)}\nЗаписей: ${items.length}\n`;
   showReportModal(report, `team-report-${todayInput()}.txt`);
 };
 
@@ -2804,6 +2938,7 @@ const ABSENCE_TYPES = {
   other: { label: '📌 Иное отсутствие', short: 'Иное отсутствие',  color: '#94a3b8' }
 };
 const ABSENCE_TYPE_KEYS = Object.keys(ABSENCE_TYPES);
+const LUNCH_LIMIT_MIN = 45;
 
 function dateFromInput(val) {
   const parts = (val || '').split('-').map(Number);
@@ -2815,6 +2950,56 @@ function buildTs(dateStr, timeStr) {
   d.setHours(h || 0, m || 0, 0, 0);
   return d.getTime();
 }
+function fmtDateRu(dateStr) {
+  const d = dateFromInput(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function dayAfterRu(dateStr) {
+  const d = dateFromInput(dateStr);
+  d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+function absenceDurMin(a) { return Math.round((a.endTs - a.startTs) / 60000); }
+
+/* Замечания по одной отметке отсутствия */
+function getAbsenceIssues(a) {
+  const mins = absenceDurMin(a);
+  const durStr = fmtDurShort(a.endTs - a.startTs);
+  const issues = [];
+  if (a.type === 'late') {
+    issues.push({ code: 'late', needExplanation: true,
+      text: `Опоздание — ${durStr} (начало рабочего времени ${a.start}${a.end ? ', фактическое появление ' + a.end : ''})` });
+  } else if (a.type === 'lunch' && mins > LUNCH_LIMIT_MIN) {
+    issues.push({ code: 'lunch', needExplanation: false,
+      text: `Превышен лимит обеда: ${durStr} (норма до ${LUNCH_LIMIT_MIN} мин, перерасход ${mins - LUNCH_LIMIT_MIN} мин)` });
+  } else if ((a.type === 'other' || a.type === 'break') && !a.note) {
+    issues.push({ code: 'unknown', needExplanation: true,
+      text: `Отсутствие без указания причины — ${durStr} (${ABSENCE_TYPES[a.type].short})` });
+  }
+  return issues;
+}
+
+/* Собирает все замечания по списку отметок отсутствия */
+function collectAbsenceRemarks(absList) {
+  const remarks = [];
+  absList.forEach(a => {
+    const emp = employees.find(e => e.id === a.employeeId);
+    const empName = emp ? emp.name : '(удалён)';
+    getAbsenceIssues(a).forEach(iss => {
+      remarks.push({ ...iss, absence: a, empName });
+    });
+  });
+  return remarks;
+}
+
+/* Извлекает рекомендованные скрипты (блоки «📞 Рекомендую скрипт») из текста ОС */
+function extractScripts(text) {
+  return splitBlocks(text)
+    .filter(b => blockKind(b) === 'script')
+    .map(b => stripBlockLabel(b));
+}
+
 function getFilteredAbsences() {
   let arr = [...empAbsences];
   if (empTimeFilter === 'today') {
@@ -2832,6 +3017,25 @@ function getFilteredAbsences() {
 }
 function absLabel(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).label; }
 function absColor(type) { return (ABSENCE_TYPES[type] || ABSENCE_TYPES.other).color; }
+
+function getFilteredSessions() {
+  let list = [...sessions];
+  if (empTimeFilter === 'today') {
+    const todayStr = todayInput();
+    list = list.filter(s => {
+      const d = new Date(s.startTs);
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` === todayStr;
+    });
+  } else if (empTimeFilter === 'week') {
+    const wa = new Date(); wa.setDate(wa.getDate() - 7); wa.setHours(0, 0, 0, 0);
+    list = list.filter(s => s.startTs >= wa.getTime());
+  } else if (empTimeFilter === 'month') {
+    const ma = new Date(); ma.setMonth(ma.getMonth() - 1); ma.setHours(0, 0, 0, 0);
+    list = list.filter(s => s.startTs >= ma.getTime());
+  }
+  if (activeEmpFilter !== null) list = list.filter(s => s.employeeId === activeEmpFilter);
+  return list.sort((a, b) => a.startTs - b.startTs);
+}
 
 function renderAbsencesList() {
   const wrap = document.getElementById('absencesAcc');
@@ -3439,20 +3643,26 @@ function buildDailyReport(dateStr) {
     return `${sDate.getFullYear()}-${pad(sDate.getMonth() + 1)}-${pad(sDate.getDate())}` === dateStr;
   });
 
+  const dayAbs = empAbsences.filter(a => a.date === dateStr).sort((a, b) => a.startTs - b.startTs);
   const empIdsWithSessions = [...new Set(daySessions.map(s => s.employeeId))];
   const dayEmpLogs = empWorkLog.filter(w => w.date === dateStr && w.endTs);
   const empIdsWithLogs = [...new Set(dayEmpLogs.map(w => w.employeeId))];
-  const allEmpIds = [...new Set([...empIdsWithSessions, ...empIdsWithLogs])];
+  const empIdsWithAbs = [...new Set(dayAbs.map(a => a.employeeId))];
+  const allEmpIds = [...new Set([...empIdsWithSessions, ...empIdsWithLogs, ...empIdsWithAbs])];
+  const dayAbsRemarks = collectAbsenceRemarks(dayAbs);
 
   if (allEmpIds.length === 0) {
-    report += 'Сессий и записей с КМ за этот день нет\n';
+    report += 'Сессий, записей и отсутствий с КМ за этот день нет\n';
   } else {
     allEmpIds.forEach(empId => {
       const emp = employees.find(e => e.id === empId);
       const empName = emp ? emp.name : '(удалён)';
       const empSessions = daySessions.filter(s => s.employeeId === empId);
       const empLogs = dayEmpLogs.filter(w => w.employeeId === empId);
+      const empAbs = dayAbs.filter(a => a.employeeId === empId);
+      const empRemarks = collectAbsenceRemarks(empAbs);
       const empTotalMs = empLogs.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+      const empAbsMs = empAbs.reduce((s, a) => s + (a.endTs - a.startTs), 0);
 
       const allCalls = empSessions.flatMap(s => s.calls);
       const okCalls = allCalls.filter(c => c.mark === 'ok').length;
@@ -3463,14 +3673,14 @@ function buildDailyReport(dateStr) {
 
       report += `👤 ${empName.toUpperCase()}\n`;
       report += `${'-'.repeat(60)}\n`;
-      report += `⏱ Общее время: ${fmtDur(empTotalMs)}\n`;
-      report += `🎧 Сессий: ${empSessions.length}\n`;
-      report += `📞 Звонков: ${allCalls.length}  ✅ ${okCalls}  ❌ ${failCalls}`;
+      report += `⏱ Общее время: ${fmtDur(empTotalMs)}`;
+      if (empAbsMs > 0) report += `   🕓 Отсутствия: ${fmtDur(empAbsMs)}`;
+      report += `\n`;
+      report += `🎧 Сессий: ${empSessions.length}   📞 Звонков: ${allCalls.length}  ✅ ${okCalls}  ❌ ${failCalls}`;
       if (noneCalls > 0) report += `  ⚪ ${noneCalls}`;
       report += `\n`;
       if (allCalls.length > 0) {
-        report += `📈 Конверсия: ${conv}%\n`;
-        report += `⏱ В звонках: ${fmtDurCall(callMs)}  (средний ${fmtDurCall(callMs / allCalls.length)})\n`;
+        report += `📈 Конверсия: ${conv}%   В звонках: ${fmtDurCall(callMs)}  (средний ${fmtDurCall(callMs / allCalls.length)})\n`;
       }
       report += `\n`;
 
@@ -3485,19 +3695,74 @@ function buildDailyReport(dateStr) {
           s.calls.forEach((c, ci) => {
             const cdur = fmtDurCall(c.endTs - c.startTs);
             const mark = c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪';
-            report += `     ${String(ci + 1).padStart(2)}. ${formatTimeShort(c.startTs)}–${formatTimeShort(c.endTs)}  ${cdur.padEnd(8)} ${mark}`;
-            if (c.os) report += `\n         📝 ${c.os}`;
-            report += `\n`;
+            report += `     ${String(ci + 1).padStart(2)}. ${formatTimeShort(c.startTs)}–${formatTimeShort(c.endTs)}  ${cdur.padEnd(8)} ${mark}\n`;
+            if (c.os) {
+              splitBlocks(c.os).forEach(line => {
+                const kind = blockKind(line);
+                const tag = kind === 'script' ? '📞 Рекомендую скрипт: ' : kind === 'os' ? '💬 ОС: ' : '';
+                report += `         📝 ${tag}${stripBlockLabel(line)}\n`;
+              });
+            }
           });
         }
 
         if (s.notes && s.notes.trim()) {
           report += `     📝 ОС по сессии:\n`;
-          const noteLines = s.notes.trim().split('\n');
-          noteLines.forEach(line => { report += `        ${line}\n`; });
+          splitBlocks(s.notes).forEach(line => {
+            const kind = blockKind(line);
+            const tag = kind === 'script' ? '📞 Рекомендую скрипт: ' : kind === 'os' ? '💬 ОС: ' : '';
+            report += `        ${tag}${stripBlockLabel(line)}\n`;
+          });
         }
         report += `\n`;
       });
+
+      /* Рекомендованные скрипты (сводно) */
+      const scripts = [];
+      empSessions.forEach(s => {
+        s.calls.forEach(c => extractScripts(c.os).forEach(x => scripts.push(x)));
+        extractScripts(s.notes).forEach(x => scripts.push(x));
+      });
+      if (scripts.length) {
+        report += `  📞 Рекомендованные скрипты:\n`;
+        [...new Set(scripts)].forEach((sc, i) => { report += `    ${i+1}. ${sc}\n`; });
+        report += `\n`;
+      }
+
+      /* Отсутствия */
+      if (empAbs.length) {
+        report += `  🕓 Отсутствия:\n`;
+        empAbs.forEach(a => {
+          report += `    • ${a.start}–${a.end} (${fmtDurShort(a.endTs - a.startTs)}) — ${absLabel(a.type)}`;
+          if (a.note) report += ` — ${a.note}`;
+          report += `\n`;
+        });
+        report += `\n`;
+      }
+
+      /* Замечания + запросы */
+      if (empRemarks.length) {
+        report += `  ⚠️ ЗАМЕЧАНИЯ:\n`;
+        empRemarks.forEach(r => { report += `    ❗ ${r.text}\n`; });
+        report += `\n`;
+        const needExpl = empRemarks.filter(r => r.needExplanation);
+        if (needExpl.length) {
+          report += `  ✉️ ТРЕБУЕТСЯ ОБЪЯСНИТЕЛЬНАЯ / ПОЯСНЕНИЕ (на имя НО):\n`;
+          needExpl.forEach(r => {
+            const a = r.absence;
+            if (r.code === 'late') {
+              report += `    • Опоздание ${fmtDateRu(a.date)} (${a.start}–${a.end}, ${fmtDurShort(a.endTs - a.startTs)}).\n`;
+              report += `      Прошу предоставить объяснительную записку на имя НО о причине опоздания.\n`;
+              report += `      Срок предоставления: до ${dayAfterRu(dateStr)}.\n`;
+            } else {
+              report += `    • Отсутствие ${fmtDateRu(a.date)} (${a.start}–${a.end}, ${fmtDurShort(a.endTs - a.startTs)}, ${absLabel(a.type)}).\n`;
+              report += `      Прошу пояснить причину отсутствия.\n`;
+              report += `      Срок предоставления: до ${dayAfterRu(dateStr)}.\n`;
+            }
+          });
+          report += `\n`;
+        }
+      }
     });
   }
 
@@ -3511,6 +3776,7 @@ function buildDailyReport(dateStr) {
   const failAll = totalCallsAll.filter(c => c.mark === 'fail').length;
   const convAll = totalCallsAll.length > 0 ? Math.round(okAll / totalCallsAll.length * 100) : 0;
   const callMsAll = totalCallsAll.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+  const dayAbsMsAll = dayAbs.reduce((s, a) => s + (a.endTs - a.startTs), 0);
 
   report += `• Моё время всего: ${fmtDur(myTotalMs)} (${myPct}%)\n`;
   report += `• Из них в сессиях с КМ: ${fmtDur(mySyncMs)}\n`;
@@ -3518,6 +3784,8 @@ function buildDailyReport(dateStr) {
   report += `• Сессий всего: ${daySessions.length}\n`;
   report += `• Звонков всего: ${totalCallsAll.length}  (✅ ${okAll}, ❌ ${failAll}, конверсия ${convAll}%)\n`;
   report += `• Время в звонках: ${fmtDurCall(callMsAll)}\n`;
+  report += `• Отсутствий КМ: ${dayAbs.length} на ${fmtDur(dayAbsMsAll)}\n`;
+  report += `• Замечаний: ${dayAbsRemarks.length}, требуют объяснения: ${dayAbsRemarks.filter(r => r.needExplanation).length}\n`;
   report += `• Задач выполнено: ${doneOnDay.length}   • В работе: ${activeTasks.length}   • Просрочено: ${overdueTasks.length}\n`;
 
   return report;
@@ -3622,6 +3890,42 @@ function buildDailyCSV(dateStr) {
         });
       }
     });
+  }
+
+  // Отсутствия и замечания
+  const dayAbsCSV = empAbsences.filter(a => a.date === dateStr).sort((a, b) => a.startTs - b.startTs);
+  if (dayAbsCSV.length > 0) {
+    rows.push(['=== ОТСУТСТВИЯ КМ ===']);
+    rows.push(['КМ', 'Тип', 'С', 'По', 'Длит. (мин)', 'Причина', 'Замечание']);
+    dayAbsCSV.forEach(a => {
+      const emp = employees.find(e => e.id === a.employeeId);
+      const remarks = collectAbsenceRemarks([a]).map(r => r.text).join('; ');
+      rows.push([
+        emp ? emp.name : '(удалён)',
+        absLabel(a.type),
+        a.start, a.end,
+        absenceDurMin(a),
+        a.note || '',
+        remarks
+      ]);
+    });
+    const dayRemarks = collectAbsenceRemarks(dayAbsCSV);
+    if (dayRemarks.some(r => r.needExplanation)) {
+      rows.push([]);
+      rows.push(['=== ТРЕБУЕТСЯ ОБЪЯСНИТЕЛЬНАЯ / ПОЯСНЕНИЕ ===']);
+      rows.push(['КМ', 'Дата', 'Длит.', 'Действие', 'Срок']);
+      dayRemarks.filter(r => r.needExplanation).forEach(r => {
+        const a = r.absence;
+        rows.push([
+          r.empName,
+          fmtDateRu(a.date),
+          fmtDurShort(a.endTs - a.startTs),
+          r.code === 'late' ? 'Объяснительная на имя НО о причине опоздания' : 'Пояснение причины отсутствия',
+          'до ' + dayAfterRu(dateStr)
+        ]);
+      });
+    }
+    rows.push([]);
   }
 
   return rows.map(r => r.map(cell => {
