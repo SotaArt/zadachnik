@@ -534,11 +534,12 @@
   .os-picker-box textarea { width: 100%; min-height: 56px; padding: 10px 12px;
     border-radius: 8px; border: 1px solid #3f3f56; background: #0f172a; color: #e4e4e7;
     font-size: 13px; font-family: inherit; resize: vertical; color-scheme: dark; }
-  .os-chips { display: flex; flex-wrap: wrap; gap: 6px; overflow-y: auto; padding-bottom: 4px; }
-  .os-chip { background: #3f3f56; color: #e4e4e7; border: none; border-radius: 16px;
-    padding: 7px 12px; font-size: 12.5px; cursor: pointer; transition: background .15s, opacity .15s; }
+  .os-chips { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding-bottom: 4px; }
+  .os-chip { background: #3f3f56; color: #e4e4e7; border: none; border-radius: 10px;
+    padding: 9px 12px; font-size: 12.5px; line-height: 1.4; cursor: pointer;
+    text-align: left; transition: background .15s, opacity .15s; }
   .os-chip:hover { background: #52527a; }
-  .os-chip.used { opacity: .4; text-decoration: line-through; }
+  .os-chip.used { opacity: .45; text-decoration: line-through; }
   .os-picker-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .os-picker-actions button { border: none; border-radius: 8px; padding: 9px 16px;
     font-size: 13px; cursor: pointer; }
@@ -740,7 +741,7 @@
         </div>
         <div style="display:flex;flex:1;gap:6px;align-items:center;flex-wrap:wrap">
           <input type="text" class="live-input" id="liveOS" placeholder="ОС по звонку..." style="flex:1;min-width:120px">
-          <button id="liveOSPicker" title="Выбрать из шаблона" style="background:#3f3f56;color:#e4e4e7;border:none;padding:8px 10px;border-radius:8px;cursor:pointer">📋</button>
+          <button id="liveOSPicker" title="Развивающая ОС (шаблоны)" style="background:#3f3f56;color:#e4e4e7;border:none;padding:8px 10px;border-radius:8px;cursor:pointer">📋</button>
         </div>
         <button class="action-btn start" id="callStartBtn">▶️ Набор</button>
         <button class="action-btn stop" id="callEndBtn" style="display:none">⏹ Отбой</button>
@@ -755,10 +756,10 @@
 
       <div class="session-notes-block">
         <label>📝 Заметки по сессии
-          <button id="sessionNotesPicker" type="button" title="Добавить из шаблонов"
-            style="background:#3f3f56;color:#e4e4e7;border:none;border-radius:8px;padding:3px 8px;margin-left:6px;cursor:pointer;font-size:12px;vertical-align:middle">📋 Шаблоны</button>
+          <button id="sessionNotesPicker" type="button" title="Развивающая ОС (шаблоны)"
+            style="background:#3f3f56;color:#e4e4e7;border:none;border-radius:8px;padding:3px 8px;margin-left:6px;cursor:pointer;font-size:12px;vertical-align:middle">📋 Развивающая ОС</button>
         </label>
-        <textarea id="sessionNotes" placeholder="Общие заметки, выводы, план на следующий раз..."></textarea>
+        <textarea id="sessionNotes" placeholder="Развивающая ОС КМ, выводы, план на следующий раз..."></textarea>
       </div>
     </div>
 
@@ -837,14 +838,36 @@ let activeEmpFilter = null;
 let activeEmpCard = null;
 let currentDraft = { mark: null, os: '' };
 const DEFAULT_OS_TEMPLATES = [
-  'Перезвонил, договорились на выходе/перенос', 'Ехал, перезвонит позже',
-  'Не взял трубку', 'Занят, перезвонит сам', 'Договорились о встрече', 'Отправил КП',
-  'Нужен расчёт', 'Нет потребности', 'Отказался говорить', 'Сбор информации',
-  'Назначил созвон', 'Загруженность, перезвон', 'Обещал подумать', 'Номер не существует',
-  'Автответчик', 'Попросил перезвонить позже', 'Уточнил ФИО/контакты', 'Проанализирует КП',
-  'Согласовал время встречи', 'Требуется обратная связь', 'Спросил про условия',
-  'Перенёс встречу', 'Заказал обратный звонок', 'Подтвердил встречу', 'Клиент уточняет',
-  'Направил ссылку', 'Запросил прайс', 'Договорились созвониться', 'Нет ответа', 'Бросил трубку'
+  'Не озвучил цель звонка. Цель — назначить встречу, а продажу закрывать уже на встрече.',
+  'Молодец, представился и назвал компанию, но не выяснил, удобно ли клиенту сейчас говорить.',
+  'Задал открытые вопросы — хорошо. Но не использовал small talk: сразу перешёл к продаже, клиент не понял, что происходит, и это повлекло отказ.',
+  'Презентация началась до выявления потребности — клиент получил информацию, которая ему, возможно, не нужна.',
+  'Хороший звонок, но не хватило открытых вопросов на выявление потребности.',
+  'Много слов-паразитов («ааа», «эээ», «ммм»). Держи паузу вместо заполнения тишины — так звучит увереннее.',
+  'Не отработал возражение, а начал спорить с клиентом. Сначала согласись, потом аргументируй.',
+  'Назвал цену раньше ценности — до того, как показал выгоду для клиента.',
+  'Не зафиксировал договорённость: не уточнил дату, время и следующий шаг.',
+  'Перебивал клиента — дай договорить, это снижает сопротивление.',
+  'Не выяснил, кто принимает решение (ЛПР) — встреча может оказаться бесполезной.',
+  'Говорил по скрипту дословно, без адаптации под ситуацию клиента.',
+  'Не выяснил текущее решение/поставщика — не понял, с чем клиент сравнивает.',
+  'Отлично установил контакт и создал доверие — так и продолжай.',
+  'Не резюмировал договорённости в конце звонка — клиент может забыть суть разговора.',
+  'Говорил только о характеристиках продукта, но не назвал выгоды для клиента.',
+  'Слишком быстрый темп речи — клиент не успевает осмыслить и переспрашивает.',
+  'Не отработал возражение «дорого» — не перевёл цену в ценность.',
+  'Задавал закрытые вопросы, на которые клиент отвечал «да/нет» — мало информации.',
+  'Не использовал технику подтверждения/«эхо», чтобы показать, что слышишь клиента.',
+  'Хорошо держал инициативу, но не дал клиенту высказаться о его проблеме.',
+  'Не уточнил критерии выбора — не понял, что для клиента действительно важно.',
+  'Завершил звонок без призыва к действию — клиент не понял следующего шага.',
+  'Тон голоса нейтральный/усталый — добавь энергии и «улыбку в голосе».',
+  'Не отработал возражение «мне нужно подумать» — не выяснил настоящую причину.',
+  'Хорошо выявил потребность, но не подытожил её перед предложением.',
+  'Не ответил на вопрос клиента прямо — ушёл в сторону и потерял доверие.',
+  'Не сослался на кейс или пример, не использовал социальное доказательство.',
+  'Согласился на «перезвоните позже» без конкретного времени и повода для звонка.',
+  'Молодец: отработал возражение и назначил встречу с конкретной датой.'
 ];
 let expandedSessions = new Set();
 let alarmAudioCtx = null;
@@ -932,7 +955,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 23,
+    version: 24,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -2108,7 +2131,7 @@ liveOSInput.addEventListener('input', () => {
 });
 
 document.getElementById('liveOSPicker').onclick = () => {
-  openOSTemplates('ОС по текущему звонку:', liveOSInput.value, v => {
+  openOSTemplates('Развивающая ОС по звонку:', liveOSInput.value, v => {
     currentDraft.os = v;
     liveOSInput.value = v;
   });
@@ -2178,23 +2201,21 @@ function renderCallsList() {
   });
 }
 
-function splitOS(text) {
-  return String(text || '').split(/;\s*/).map(s => s.trim()).filter(Boolean);
+function normalizeOS(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
 }
-function joinOS(parts) { return parts.join('; '); }
 function addOSpart(base, part) {
-  const parts = splitOS(base);
-  if (parts.includes(part)) return { text: joinOS(parts), added: false };
-  parts.push(part);
-  return { text: joinOS(parts), added: true };
+  const b = normalizeOS(base);
+  if (b.includes(part)) return { text: b, added: false };
+  return { text: b ? b + ' ' + part : part, added: true };
 }
-function openOSTemplates(title, initialValue, onApply) {
+function openOSTemplates(title, initialValue, onApply, placeholder) {
   const wrap = document.createElement('div');
   wrap.className = 'os-picker-modal';
   wrap.innerHTML = `
     <div class="os-picker-box">
       <h3>${title}</h3>
-      <textarea id="osPickerText" placeholder="Комментарий по звонку (части разделяются «;»)">${esc(initialValue || '')}</textarea>
+      <textarea id="osPickerText" placeholder="${esc(placeholder || 'Развивающая ОС...')}">${esc(initialValue || '')}</textarea>
       <div class="os-chips" id="osChips"></div>
       <div class="os-picker-actions">
         <button class="os-picker-cancel" type="button">Отмена</button>
@@ -2205,14 +2226,15 @@ function openOSTemplates(title, initialValue, onApply) {
   const text = wrap.querySelector('#osPickerText');
   const chips = wrap.querySelector('#osChips');
   const renderChips = () => {
-    const parts = splitOS(text.value);
+    const cur = normalizeOS(text.value);
     chips.innerHTML = '';
     DEFAULT_OS_TEMPLATES.forEach(t => {
+      const used = cur.includes(t);
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'os-chip' + (parts.includes(t) ? ' used' : '');
+      b.className = 'os-chip' + (used ? ' used' : '');
       b.textContent = t;
-      b.title = parts.includes(t) ? 'Уже добавлено в этот комментарий' : 'Добавить в комментарий';
+      b.title = used ? 'Уже добавлено в этот комментарий' : 'Добавить в комментарий';
       b.onclick = () => {
         const r = addOSpart(text.value, t);
         if (!r.added) return;
@@ -2226,7 +2248,7 @@ function openOSTemplates(title, initialValue, onApply) {
   wrap.querySelector('.os-picker-cancel').onclick = () => wrap.remove();
   wrap.addEventListener('click', e => { if (e.target === wrap) wrap.remove(); });
   wrap.querySelector('.os-picker-ok').onclick = () => {
-    onApply(joinOS(splitOS(text.value)));
+    onApply(normalizeOS(text.value));
     wrap.remove();
   };
 }
@@ -2235,7 +2257,7 @@ function editCallOS(idx) {
   if (!activeEmpTimer || activeEmpTimer.mode !== 'session') return;
   const call = activeEmpTimer.calls[idx];
   if (!call) return;
-  openOSTemplates('ОС по звонку #' + (idx + 1) + ':', call.os, v => {
+  openOSTemplates('Развивающая ОС по звонку #' + (idx + 1) + ':', call.os, v => {
     call.os = v;
     save();
     renderCallsList();
@@ -2387,7 +2409,7 @@ sessionNotesEl.addEventListener('input', () => {
 });
 
 document.getElementById('sessionNotesPicker').onclick = () => {
-  openOSTemplates('Шаблоны комментариев', sessionNotesEl.value, v => {
+  openOSTemplates('Развивающая ОС (заметки по сессии)', sessionNotesEl.value, v => {
     sessionNotesEl.value = v;
     if (activeEmpTimer && activeEmpTimer.mode === 'session') {
       activeEmpTimer.notes = v;
