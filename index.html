@@ -540,6 +540,13 @@
     text-align: left; transition: background .15s, opacity .15s; }
   .os-chip:hover { background: #52527a; }
   .os-chip.used { opacity: .45; text-decoration: line-through; }
+  .os-tabs { display: flex; gap: 6px; }
+  .os-tab { flex: 1; background: #26263c; color: #a1a1c2; border: 1px solid #3f3f56;
+    border-radius: 8px; padding: 8px 10px; font-size: 12.5px; cursor: pointer; }
+  .os-tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+  .os-group { font-size: 11px; font-weight: 600; color: #818cf8; text-transform: uppercase;
+    letter-spacing: .4px; margin: 8px 0 2px; }
+  .os-group:first-child { margin-top: 0; }
   .os-picker-actions { display: flex; gap: 8px; justify-content: flex-end; }
   .os-picker-actions button { border: none; border-radius: 8px; padding: 9px 16px;
     font-size: 13px; cursor: pointer; }
@@ -867,7 +874,45 @@ const DEFAULT_OS_TEMPLATES = [
   'Не ответил на вопрос клиента прямо — ушёл в сторону и потерял доверие.',
   'Не сослался на кейс или пример, не использовал социальное доказательство.',
   'Согласился на «перезвоните позже» без конкретного времени и повода для звонка.',
-  'Молодец: отработал возражение и назначил встречу с конкретной датой.'
+  'Молодец: отработал возражение и назначил встречу с конкретной датой.',
+  'Не назвал свою должность/экспертизу — клиент не понял, почему именно вы звоните.',
+  'Начал разговор с предложения, пропустив приветствие и small talk.',
+  'Говорил «много», «быстро», «выгодно» без конкретики: цифр, сроков и условий.',
+  'Задал уточняющий вопрос, но сам же на него ответил — не дал клиенту развернуть мысль.',
+  'Не сформулировал УТП в одном предложении — клиент не понял, чем вы отличаетесь.',
+  'Не создал ощущение ограниченности по времени/условиям — клиент решил «подумать».',
+  'Назначил встречу, но не согласовал её повестку и пользу для клиента.',
+  'Не переспросил, верно ли клиент понял условия — риск разного понимания.',
+  'Задал много вопросов подряд — диалог стал похож на допрос.',
+  'Говорил о себе («мы», «у нас»), а не о выгоде клиента («вы получите»).',
+  'Не подводил промежуточные итоги по ходу звонка.',
+  'Использовал единственный аргумент и не был готов к альтернативной аргументации.',
+  'Заметно торопился — клиент почувствовал навязывание и закрылся.',
+  'Не дал клиенту задать уточняющий вопрос, сразу перешёл к следующему блоку.',
+  'Отлично завершил звонок: подвёл итог, назначил встречу и подтвердил дату.',
+  'Не зафиксировал, с кем и по какому вопросу общаться дальше — следующий шаг размылся.',
+  'Не предусмотрел запасной план, если ЛПР на встрече не будет.',
+  'Клиент открылся на проблему благодаря точному экспертному вопросу — сильный ход, закрепи её.',
+  'Пропустил этап квалификации (потребность/бюджет/сроки) и сразу перешёл к презентации.',
+  'Не работал с темпом клиента: торопил его, вместо того чтобы подстроиться под его ритм.'
+];
+const CALL_SCRIPT_TEMPLATES = [
+  { group: 'Продажа встречи', text: 'Здравствуйте, [Имя]! Меня зовут [Имя], компания [Компания]. Не буду забирать время: предлагаю короткую онлайн-встречу на 15 минут, где покажу, как снизить [боль/затраты] в вашей нише. Есть смысл посмотреть это в четверг?' },
+  { group: 'Продажа встречи', text: '[Имя], добрый день! Чтобы не уговаривать по телефону, предлагаю показать расчёт цифрами. Если после встречи не увидите выгоды — расстаёмся. Какой слот удобнее: утро или день?' },
+  { group: 'Продажа встречи', text: 'Здравствуйте! Кратко: [конкретный кейс/выгода] для компаний вашего профиля. Осталось разобрать ваши цифры — это 15 минут онлайн. Удобно в четверг в 11:00?' },
+  { group: 'Продажа встречи', text: 'День добрый, [Имя]! Что вас останавливает от встречи? Если время — она займёт 10 минут и пройдёт онлайн. Когда удобнее?' },
+  { group: 'Продажа встречи', text: '[Имя], здравствуйте! У нас для вашей отрасли есть решение, которое окупается с первого месяца. Покажу на встрече 15 минут. Подтверждаем четверг в 11:00?' },
+  { group: 'РКО (расчётный счёт)', text: 'Здравствуйте, [Имя]! Меня зовут [Имя], компания [Компания]. Подскажите, счёт у вас оформлен как физлицо или ИП/ООО? Мы переносим РКО бесплатно, обслуживание 3 месяца — 0 ₽. Готовы посмотреть разницу по вашим тратам?' },
+  { group: 'РКО (расчётный счёт)', text: '[Имя], добрый день! Мы открываем расчётный счёт онлайн за 15 минут, без визита в офис. Вопрос: успеем ли перевести операции до конца месяца, чтобы не было простоя? Хватит ли 10 минут на созвон?' },
+  { group: 'РКО (расчётный счёт)', text: 'День добрый, [Имя]! Как часто вы сталкиваетесь с комиссиями и задержками платежей? Для клиентов вашей ниши мы снимаем это уже в первый месяц. Интересно посчитать на вашем обороте?' },
+  { group: 'РКО (расчётный счёт)', text: 'Здравствуйте! [Имя], вы открывали РКО недавно? Если нет — сделаем резервный счёт за 15 минут, ведение от 0 ₽, без визита в банк. Где удобнее продолжить: в мессенджере или на видеозвонке?' },
+  { group: 'Эквайринг', text: '[Имя], добрый день! Сколько сейчас стоит вам приём оплаты картой в месяц? Мы подключаем эквайринг от 1,5% и привозим терминал за 2 дня. Могу посчитать вашу экономию на обороте — интересно?' },
+  { group: 'Эквайринг', text: 'Здравствуйте, [Имя]! Для компаний вашего профиля действует 0% на первые 100 000 ₽ оборота. Терминал привезём завтра, интеграция с кассой бесплатно. Куда удобнее прислать предложение?' },
+  { group: 'Эквайринг', text: 'День добрый! Вы принимаете оплату только наличными или картой тоже? Если согласуете — поставим терминал с интеграцией в ваш учёт. Какие вопросы по тарифу остались?' },
+  { group: 'Эквайринг', text: '[Имя], вопрос: какая доля отказов оплаты на кассе? Мы снижаем её за счёт новой техники. Свободны в четверг на 15 минут, чтобы обсудить на ваших цифрах?' },
+  { group: 'Карта Альфа Онли', text: 'Здравствуйте, [Имя]! Мы подключаем карту «Альфа Онли» для предпринимателя: процент на остаток, бесплатные переводы, оформление онлайн за день. Хотите посчитать выгоду на вашем обороте?' },
+  { group: 'Карта Альфа Онли', text: 'Добрый день, [Имя]! Карта «Альфа Онли»: кэшбэк на расходы компании и бесплатные переводы. Подключается вместе с РКО за 1 день. Можно задать 3 вопроса, чтобы понять, есть ли смысл?' },
+  { group: 'Карта Альфа Онли', text: '[Имя], здравствуйте! Напоминаю про «Альфа Онли»: вернём процент на операционный остаток и снизим плату за переводы. Удобно выйти на встречу на 10 минут в среду?' }
 ];
 let expandedSessions = new Set();
 let alarmAudioCtx = null;
@@ -955,7 +1000,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 24,
+    version: 25,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -2216,6 +2261,10 @@ function openOSTemplates(title, initialValue, onApply, placeholder) {
     <div class="os-picker-box">
       <h3>${title}</h3>
       <textarea id="osPickerText" placeholder="${esc(placeholder || 'Развивающая ОС...')}">${esc(initialValue || '')}</textarea>
+      <div class="os-tabs">
+        <button type="button" class="os-tab active" data-ostab="os">💬 Развивающая ОС</button>
+        <button type="button" class="os-tab" data-ostab="script">📞 Скрипты звонка</button>
+      </div>
       <div class="os-chips" id="osChips"></div>
       <div class="os-picker-actions">
         <button class="os-picker-cancel" type="button">Отмена</button>
@@ -2225,25 +2274,46 @@ function openOSTemplates(title, initialValue, onApply, placeholder) {
   document.body.appendChild(wrap);
   const text = wrap.querySelector('#osPickerText');
   const chips = wrap.querySelector('#osChips');
-  const renderChips = () => {
-    const cur = normalizeOS(text.value);
-    chips.innerHTML = '';
-    DEFAULT_OS_TEMPLATES.forEach(t => {
-      const used = cur.includes(t);
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'os-chip' + (used ? ' used' : '');
-      b.textContent = t;
-      b.title = used ? 'Уже добавлено в этот комментарий' : 'Добавить в комментарий';
-      b.onclick = () => {
-        const r = addOSpart(text.value, t);
-        if (!r.added) return;
-        text.value = r.text;
-        renderChips();
-      };
-      chips.appendChild(b);
-    });
+  let activeTab = 'os';
+
+  const addPart = (part) => {
+    const r = addOSpart(text.value, part);
+    if (!r.added) return;
+    text.value = r.text;
+    renderChips();
   };
+  const chip = (part) => {
+    const used = normalizeOS(text.value).includes(part);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'os-chip' + (used ? ' used' : '');
+    b.textContent = part;
+    b.title = used ? 'Уже добавлено' : 'Добавить в комментарий';
+    b.onclick = () => addPart(part);
+    return b;
+  };
+  const renderChips = () => {
+    chips.innerHTML = '';
+    wrap.querySelectorAll('.os-tab').forEach(tb => tb.classList.toggle('active', tb.dataset.ostab === activeTab));
+    if (activeTab === 'os') {
+      DEFAULT_OS_TEMPLATES.forEach(t => chips.appendChild(chip(t)));
+    } else {
+      let lastGroup = null;
+      CALL_SCRIPT_TEMPLATES.forEach(s => {
+        if (s.group !== lastGroup) {
+          lastGroup = s.group;
+          const g = document.createElement('div');
+          g.className = 'os-group';
+          g.textContent = s.group;
+          chips.appendChild(g);
+        }
+        chips.appendChild(chip(s.text));
+      });
+    }
+  };
+  wrap.querySelectorAll('.os-tab').forEach(tb => {
+    tb.onclick = () => { activeTab = tb.dataset.ostab; renderChips(); };
+  });
   renderChips();
   wrap.querySelector('.os-picker-cancel').onclick = () => wrap.remove();
   wrap.addEventListener('click', e => { if (e.target === wrap) wrap.remove(); });
