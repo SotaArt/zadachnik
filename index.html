@@ -805,6 +805,7 @@
     <div class="filters">
       <button data-etfilter="today" class="active">Сегодня</button>
       <button data-etfilter="week">За 7 дней</button>
+      <button data-etfilter="month">За месяц</button>
       <button data-etfilter="all">Все записи</button>
       <button id="teamReportBtn" style="margin-left:auto;background:#a78bfa;color:white;">📤 Отчёт по команде</button>
     </div>
@@ -1020,7 +1021,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 26,
+    version: 27,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, sessions, dailyPulse
   };
@@ -1515,6 +1516,15 @@ document.querySelectorAll('.filters button[data-tfilter]').forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll('.filters button[data-tfilter]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active'); timeFilter = btn.dataset.tfilter; renderWork();
+  };
+});
+document.querySelectorAll('.filters button[data-etfilter]').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.filters button[data-etfilter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    empTimeFilter = btn.dataset.etfilter;
+    renderTeam();
+    renderSessionsHistory();
   };
 });
 function getFilteredWork() {
@@ -2573,6 +2583,9 @@ function getFilteredEmpWork() {
   else if (empTimeFilter === 'week') {
     const wa = new Date(); wa.setDate(wa.getDate()-7); wa.setHours(0,0,0,0);
     arr = arr.filter(w => w.startTs >= wa.getTime());
+  } else if (empTimeFilter === 'month') {
+    const ma = new Date(); ma.setMonth(ma.getMonth()-1); ma.setHours(0,0,0,0);
+    arr = arr.filter(w => w.startTs >= ma.getTime());
   }
   if (activeEmpFilter !== null) arr = arr.filter(w => w.employeeId === activeEmpFilter);
   return arr;
@@ -2659,11 +2672,26 @@ function renderSessionsHistory() {
   const box = document.getElementById('sessionsList');
   if (!box) return;
   box.innerHTML = '';
-  if (sessions.length === 0) {
+  let list = [...sessions];
+  if (empTimeFilter === 'today') {
+    const todayStr = todayInput();
+    list = list.filter(s => {
+      const d = new Date(s.startTs);
+      const ds = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      return ds === todayStr;
+    });
+  } else if (empTimeFilter === 'week') {
+    const wa = new Date(); wa.setDate(wa.getDate()-7); wa.setHours(0,0,0,0);
+    list = list.filter(s => s.startTs >= wa.getTime());
+  } else if (empTimeFilter === 'month') {
+    const ma = new Date(); ma.setMonth(ma.getMonth()-1); ma.setHours(0,0,0,0);
+    list = list.filter(s => s.startTs >= ma.getTime());
+  }
+  if (list.length === 0) {
     box.innerHTML = '<div class="empty" style="padding:20px 0;font-size:13px">Пока нет завершённых сессий</div>';
     return;
   }
-  const sorted = [...sessions].sort((a, b) => b.startTs - a.startTs);
+  const sorted = list.sort((a, b) => b.startTs - a.startTs);
   sorted.forEach(s => {
     const emp = employees.find(e => e.id === s.employeeId);
     const dur = s.endTs - s.startTs;
