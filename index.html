@@ -1164,7 +1164,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 31,
+    version: 32,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -5082,7 +5082,16 @@ newText.focus();
   function hookAdminTab() {
     const btn = document.querySelector('.tabs [data-tab="km"]');
     if (!btn) return;
-    btn.addEventListener('click', () => { kmRenderAdmin(); startAdminPoll(); });
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = el('panel-km');
+      if (panel) panel.classList.add('active');
+      if (typeof window.updateTopButtons === 'function') window.updateTopButtons();
+      kmRenderAdmin();
+      startAdminPoll();
+    });
   }
   function startAdminPoll() {
     if (KM.pollId) clearInterval(KM.pollId);
