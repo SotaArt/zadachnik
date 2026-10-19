@@ -610,6 +610,78 @@
     font-size: 13px; cursor: pointer; }
   .os-picker-cancel { background: #3f3f56; color: #e4e4e7; }
   .os-picker-ok { background: #6366f1; color: white; }
+
+  /* ===== Режим КМ / облако ===== */
+  .km-root { position: fixed; inset: 0; background: #16161f; color: #e4e4e7;
+    overflow-y: auto; z-index: 2000; font-size: 15px; }
+  .km-topbar { position: sticky; top: 0; display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; background: #1e1e2e; border-bottom: 1px solid #2e2e42; z-index: 5; }
+  .km-logo { font-weight: 700; }
+  .km-net { color: #a1a1aa; font-size: 12px; }
+  .km-online { margin-left: auto; }
+  .km-logout { background: #3f3f56; color: #e4e4e7; border: none; border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; }
+  .km-body { max-width: 760px; margin: 0 auto; padding: 16px; }
+  .km-card { background: #232334; border: 1px solid #2e2e42; border-radius: 12px;
+    padding: 14px; margin-bottom: 14px; }
+  .km-name { font-size: 20px; font-weight: 700; margin: 4px 0 14px; }
+  .km-login { max-width: 360px; margin: 40px auto; }
+  .km-login h2 { margin-bottom: 6px; font-size: 18px; }
+  .km-login label { display: block; margin: 12px 0 5px; font-size: 13px; color: #a1a1aa; }
+  .km-muted { color: #a1a1aa; font-size: 13px; }
+  .km-err { color: #fb7185; font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .km-input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #3f3f56;
+    background: #1e1e2e; color: #e4e4e7; font-size: 15px; box-sizing: border-box; }
+  select.km-input { height: 42px; }
+  .km-primary { width: 100%; margin-top: 12px; background: #6366f1; color: #fff; border: none;
+    border-radius: 8px; padding: 11px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .km-primary.sm, .km-btn { width: auto; margin: 0; padding: 9px 14px; font-size: 14px; }
+  .km-stop { width: 100%; margin-top: 12px; background: #ef4444; color: #fff; border: none;
+    border-radius: 8px; padding: 11px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .km-timer-clock { font-size: 42px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+  .km-timer-sub { text-align: center; color: #a1a1aa; font-size: 13px; margin-bottom: 12px; }
+  .km-timer-btns { display: flex; gap: 10px; }
+  .km-timer-btns .km-primary, .km-timer-btns .km-stop { flex: 1; }
+  .km-day-total { text-align: center; color: #4ade80; font-size: 13px; margin-top: 10px; }
+  .km-card-head { font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .km-row { display: flex; gap: 8px; align-items: stretch; }
+  .km-row .km-primary { margin: 0; width: auto; padding: 0 16px; }
+  .km-row .km-btn { padding: 0 14px; }
+  .km-due { max-width: 150px; }
+  .km-list { margin-top: 10px; }
+  .km-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid #2a2a3c; }
+  .km-item label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; }
+  .km-item.done span { text-decoration: line-through; color: #71717a; }
+  .km-del { background: none; border: none; color: #71717a; cursor: pointer; font-size: 14px; }
+  .km-del:hover { color: #fb7185; }
+  .km-ev { font-size: 12px; color: #a1a1aa; padding: 3px 0; }
+  .km-events-card { background: #1f1f2e; }
+  .km-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .km-badge.run { background: #422006; color: #fbbf24; }
+  .km-badge.on { background: #052e16; color: #4ade80; }
+  .km-badge.off { background: #27272a; color: #a1a1aa; }
+  .km-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .km-conn { flex: 1 1 100%; color: #a1a1aa; font-size: 13px; }
+  .km-btn { background: #3f3f56; color: #e4e4e7; border: none; border-radius: 8px; cursor: pointer; }
+  .km-btn:hover { background: #4b4b66; }
+  .km-danger { background: #7f1d1d; }
+  .km-danger:hover { background: #991b1b; }
+  .km-danger { background: #7f1d1d; }
+  .km-admin-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .km-acard { background: #232334; border: 1px solid #2e2e42; border-radius: 12px; padding: 12px; }
+  .km-acard-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .km-acard-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: #d4d4d8; margin-bottom: 8px; }
+  .km-acard-ev { margin-bottom: 8px; }
+  .km-acard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .km-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex;
+    align-items: center; justify-content: center; z-index: 3000; padding: 20px; }
+  .km-modal { background: #2a2a3c; border-radius: 12px; padding: 20px; max-width: 420px;
+    width: 100%; color: #e4e4e7; max-height: 86vh; overflow-y: auto; }
+  .km-modal-wide { max-width: 640px; }
+  .km-modal h3 { margin-bottom: 10px; font-size: 17px; }
+  .km-modal label { display: block; margin: 10px 0 5px; font-size: 13px; color: #a1a1aa; }
+  .km-modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .km-view-sec { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid #3f3f56; }
 </style>
 </head>
 <body>
@@ -881,6 +953,8 @@
       </div>
     </div>
   </div>
+
+  <div class="tab-panel" id="panel-km"></div>
 </div>
 
 <div class="alarm-banner" id="alarmBanner">
@@ -1090,7 +1164,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 30,
+    version: 31,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4406,6 +4480,637 @@ updateTimerDisplay();
 updateEmpTimerDisplay();
 
 newText.focus();
+</script>
+<script>
+/* ============================================================
+   РЕЖИМ КМ + ОБЛАКО SUPABASE (v31)
+   Кабинет КМ со своим листом, таймером дня, чеклистом, задачами
+   и антифродом; админ видит все листы, управляет КМ и ссылками.
+============================================================ */
+(function () {
+  'use strict';
+
+  const CFG_KEY = 'tasker_km_cfg';
+  const IDLE_MS = 10 * 60 * 1000;
+  const HEARTBEAT_MS = 30 * 1000;
+  const ONLINE_MS = 90 * 1000;
+
+  const KM = {
+    cfg: { url: '', key: '' },
+    mode: false,
+    row: null,
+    doc: null,
+    roster: [],
+    adminRows: [],
+    pollId: null,
+    hbId: null,
+    idleId: null,
+    lastActivity: Date.now(),
+    tStart: 0
+  };
+  window.__KM = KM;
+
+  function el(id) { return document.getElementById(id); }
+  function ce(tag, cls, html) {
+    const d = document.createElement(tag);
+    if (cls) d.className = cls;
+    if (html != null) d.innerHTML = html;
+    return d;
+  }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  function fmtClock(ms) {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return pad2(h) + ':' + pad2(m) + ':' + pad2(ss);
+  }
+  function fmtDur(ms) {
+    const m = Math.round(ms / 60000);
+    const h = Math.floor(m / 60);
+    return h ? h + 'ч ' + (m % 60) + 'м' : m + 'м';
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  async function sha256hex(str) {
+    try {
+      if (window.crypto && crypto.subtle) {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    } catch (e) {}
+    let h1 = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h1 ^= str.charCodeAt(i); h1 = (h1 * 0x01000193) >>> 0; }
+    return 'fnv' + h1.toString(16);
+  }
+  async function pinHash(kmId, pin) { return sha256hex('km:' + kmId + ':' + pin); }
+
+  function cfgLoad() {
+    const p = parseHash();
+    if (p.u && p.k) { KM.cfg = { url: p.u, key: p.k }; cfgSave(); }
+    else {
+      try { const s = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (s) KM.cfg = s; } catch (e) {}
+    }
+  }
+  function cfgSave() { try { localStorage.setItem(CFG_KEY, JSON.stringify(KM.cfg)); } catch (e) {} }
+  function cfgReady() { return !!(KM.cfg.url && KM.cfg.key); }
+
+  function parseHash() {
+    const h = location.hash || '';
+    const out = {};
+    if (!/^#km/.test(h)) return out;
+    const q = h.includes('?') ? h.slice(h.indexOf('?') + 1) : '';
+    q.split('&').forEach(kv => {
+      if (!kv) return;
+      const i = kv.indexOf('='); if (i < 0) return;
+      const k = kv.slice(0, i), v = kv.slice(i + 1);
+      if (k === 'u') out.u = decodeURIComponent(v);
+      if (k === 'k') out.k = decodeURIComponent(v);
+      if (k === 'id') out.id = decodeURIComponent(v);
+    });
+    return out;
+  }
+  function kmIsMode() { return /^#km/.test(location.hash || ''); }
+
+  async function api(path, opts) {
+    if (!cfgReady()) throw new Error('Не настроено подключение к облаку');
+    const base = KM.cfg.url.replace(/\/+$/, '');
+    const res = await fetch(base + '/rest/v1/' + path, Object.assign({
+      headers: {
+        apikey: KM.cfg.key,
+        Authorization: 'Bearer ' + KM.cfg.key,
+        'Content-Type': 'application/json'
+      }
+    }, opts || {}));
+    const txt = await res.text();
+    if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + txt.slice(0, 180));
+    return txt ? JSON.parse(txt) : null;
+  }
+  async function rosterList() {
+    return api('km_state?select=km_id,name,updated_at&order=name.asc');
+  }
+  async function rowGet(kmId) {
+    const r = await api('km_state?select=*&km_id=eq.' + encodeURIComponent(kmId));
+    return r && r[0] ? r[0] : null;
+  }
+  async function rowUpsert(row) {
+    return api('km_state?on_conflict=km_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(row)
+    });
+  }
+  async function rowDelete(kmId) {
+    return api('km_state?km_id=eq.' + encodeURIComponent(kmId), { method: 'DELETE' });
+  }
+  async function pushDoc() {
+    if (!KM.row) return;
+    KM.row.doc = KM.doc;
+    KM.row.updated_at = new Date().toISOString();
+    await rowUpsert({ km_id: KM.row.km_id, name: KM.row.name, pin_hash: KM.row.pin_hash, doc: KM.doc, deleted: false });
+  }
+
+  function emptyDoc() {
+    return { checklist: [], tasks: [], entries: [], events: [], timer: null, lastSeen: Date.now(), day: today() };
+  }
+  function normDoc(d) {
+    const e = emptyDoc();
+    if (!d || typeof d !== 'object') return e;
+    return {
+      checklist: Array.isArray(d.checklist) ? d.checklist : [],
+      tasks: Array.isArray(d.tasks) ? d.tasks : [],
+      entries: Array.isArray(d.entries) ? d.entries : [],
+      events: Array.isArray(d.events) ? d.events : [],
+      timer: d.timer || null, lastSeen: d.lastSeen || Date.now(), day: d.day || today()
+    };
+  }
+  function todayMs() {
+    const base = today();
+    return KM.doc.entries.filter(x => x.date === base).reduce((s, x) => s + Math.max(0, x.endTs - x.startTs), 0);
+  }
+  function logEvent(type, note) {
+    KM.doc.events.unshift({ id: uid(), ts: Date.now(), type: type, note: note || '' });
+    KM.doc.events = KM.doc.events.slice(0, 200);
+  }
+
+  let kmRoot = null, kmTimerId = null;
+
+  function buildShell() {
+    kmRoot = ce('div', 'km-root');
+    kmRoot.id = 'kmApp';
+    kmRoot.style.display = 'none';
+    kmRoot.innerHTML =
+      '<div class="km-topbar">' +
+        '<span class="km-logo">📋 Задачник · кабинет КМ</span>' +
+        '<span class="km-online" id="kmOnlineDot">●</span>' +
+        '<span class="km-net" id="kmNet"></span>' +
+        '<button class="km-logout" id="kmLogoutBtn" style="display:none">Выйти</button>' +
+      '</div>' +
+      '<div class="km-body" id="kmBody"></div>';
+    document.body.appendChild(kmRoot);
+    el('kmLogoutBtn').onclick = kmLogout;
+  }
+
+  function kmShowLogin(preId) {
+    el('kmLogoutBtn').style.display = 'none';
+    const body = el('kmBody');
+    body.innerHTML =
+      '<div class="km-card km-login">' +
+        '<h2>Вход в кабинет КМ</h2>' +
+        '<p class="km-muted">Выберите себя и введите ПИН-код</p>' +
+        '<label>Кто вы</label>' +
+        '<select id="kmPick" class="km-input"><option value="">— загрузка списка… —</option></select>' +
+        '<label>ПИН-код</label>' +
+        '<input id="kmPin" class="km-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">' +
+        '<button class="km-primary" id="kmLoginBtn">Войти</button>' +
+        '<div class="km-err" id="kmErr"></div>' +
+      '</div>';
+    el('kmLoginBtn').onclick = kmDoLogin;
+    el('kmPin').addEventListener('keydown', e => { if (e.key === 'Enter') kmDoLogin(); });
+    loadRosterIntoPicker(preId);
+  }
+
+  async function loadRosterIntoPicker(preId) {
+    const pick = el('kmPick');
+    if (!cfgReady()) {
+      pick.innerHTML = '<option value="">— облако не настроено —</option>';
+      el('kmErr').textContent = 'Нет доступа к облаку. Откройте персональную ссылку от руководителя.';
+      return;
+    }
+    try {
+      KM.roster = await rosterList();
+      pick.innerHTML = '<option value="">— выберите себя —</option>' +
+        KM.roster.map(r => '<option value="' + esc(r.km_id) + '">' + esc(r.name) + '</option>').join('');
+      if (preId) pick.value = preId;
+    } catch (e) {
+      pick.innerHTML = '<option value="">— ошибка загрузки —</option>';
+      el('kmErr').textContent = e.message;
+    }
+  }
+
+  async function kmDoLogin() {
+    const kmId = el('kmPick').value;
+    const pin = el('kmPin').value.trim();
+    const err = el('kmErr');
+    err.textContent = '';
+    if (!kmId) { err.textContent = 'Выберите себя из списка'; return; }
+    if (!pin) { err.textContent = 'Введите ПИН-код'; return; }
+    try {
+      const row = await rowGet(kmId);
+      if (!row) { err.textContent = 'КМ не найден'; return; }
+      const h = await pinHash(kmId, pin);
+      if (row.pin_hash && row.pin_hash !== h) { err.textContent = 'Неверный ПИН-код'; return; }
+      KM.row = row;
+      KM.doc = normDoc(row.doc);
+      KM.doc.day = today();
+      kmStartHeartbeat();
+      kmShowSheet();
+      kmPushSoon();
+    } catch (e) { err.textContent = e.message; }
+  }
+
+  function kmLogout() {
+    if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('logout');
+    kmStopHeartbeat();
+    KM.row = null; KM.doc = null;
+    kmShowLogin();
+  }
+
+  function kmShowSheet() {
+    el('kmLogoutBtn').style.display = 'inline-block';
+    const body = el('kmBody');
+    body.innerHTML =
+      '<div class="km-name" id="kmName"></div>' +
+      '<div class="km-card km-timer">' +
+        '<div class="km-timer-clock" id="kmClock">00:00:00</div>' +
+        '<div class="km-timer-sub" id="kmTimerSub">— таймер остановлен —</div>' +
+        '<input id="kmTopic" class="km-input" placeholder="Над чем работаю сейчас?" autocomplete="off">' +
+        '<div class="km-timer-btns">' +
+          '<button class="km-primary" id="kmStartBtn">▶ Старт дня</button>' +
+          '<button class="km-stop" id="kmStopBtn" style="display:none">■ Стоп</button>' +
+        '</div>' +
+        '<div class="km-day-total" id="kmDayTotal"></div>' +
+      '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>✅ Чеклист дня</span></div>' +
+        '<div class="km-row"><input id="kmChkText" class="km-input" placeholder="Пункт плана…"><button class="km-btn" id="kmChkAdd">+</button></div>' +
+        '<div id="kmChkList" class="km-list"></div>' +
+      '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>📋 Мои задачи</span></div>' +
+        '<div class="km-row"><input id="kmTaskText" class="km-input" placeholder="Новая задача…"><input id="kmTaskDue" type="date" class="km-input km-due"><button class="km-btn" id="kmTaskAdd">+</button></div>' +
+        '<div id="kmTaskList" class="km-list"></div>' +
+      '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>⏱ Моё время сегодня <span id="kmEntriesSum" class="km-muted"></span></span></div>' +
+        '<div id="kmEntries" class="km-list"></div>' +
+      '</div>' +
+      '<div class="km-card km-events-card">' +
+        '<div class="km-card-head"><span>🛡 Активность / антифрод</span></div>' +
+        '<div id="kmEvents" class="km-list"></div>' +
+      '</div>';
+
+    el('kmName').textContent = KM.row.name;
+    el('kmStartBtn').onclick = kmStartTimer;
+    el('kmStopBtn').onclick = () => kmStopTimer('manual');
+    el('kmChkAdd').onclick = addChecklist;
+    el('kmTaskAdd').onclick = addTask;
+    el('kmChkText').addEventListener('keydown', e => { if (e.key === 'Enter') addChecklist(); });
+    el('kmTaskText').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+    if (KM.doc.timer && KM.doc.timer.running) {
+      el('kmStartBtn').style.display = 'none';
+      el('kmStopBtn').style.display = 'inline-block';
+      el('kmTopic').value = KM.doc.timer.topic || '';
+      kmTick();
+      kmTimerId = setInterval(kmTick, 1000);
+    }
+    renderSheet();
+  }
+
+  function renderSheet() {
+    if (!KM.doc) return;
+    const chk = el('kmChkList');
+    if (chk) chk.innerHTML = KM.doc.checklist.length ? KM.doc.checklist.map(it =>
+      '<div class="km-item' + (it.done ? ' done' : '') + '">' +
+        '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '><span>' + esc(it.text) + '</span></label>' +
+        '<button class="km-del" data-chkdel="' + it.id + '">✕</button>' +
+      '</div>').join('') : '<div class="km-muted">Пока пусто</div>';
+    const tl = el('kmTaskList');
+    if (tl) tl.innerHTML = KM.doc.tasks.length ? KM.doc.tasks.map(t =>
+      '<div class="km-item' + (t.done ? ' done' : '') + '">' +
+        '<label><input type="checkbox" data-task="' + t.id + '"' + (t.done ? ' checked' : '') + '><span>' + esc(t.text) + '</span></label>' +
+        '<span class="km-muted">' + (t.deadline ? esc(t.deadline) : '') + '</span>' +
+        '<button class="km-del" data-taskdel="' + t.id + '">✕</button>' +
+      '</div>').join('') : '<div class="km-muted">Пока пусто</div>';
+    const en = el('kmEntries');
+    const todays = KM.doc.entries.filter(x => x.date === today()).sort((a, b) => b.startTs - a.startTs);
+    if (en) en.innerHTML = todays.length ? todays.map(x =>
+      '<div class="km-item"><span>' + esc(x.start) + '–' + esc(x.end) + '</span><span class="km-muted">' + fmtDur(x.endTs - x.startTs) + '</span><span>' + esc(x.text) + '</span></div>'
+    ).join('') : '<div class="km-muted">Записей за сегодня нет</div>';
+    const es = el('kmEntriesSum'); if (es) es.textContent = '— ' + fmtDur(todayMs());
+    const ev = el('kmEvents');
+    if (ev) ev.innerHTML = KM.doc.events.slice(0, 12).map(e => {
+      const t = new Date(e.ts);
+      const lbl = { start: '▶ старт', stop: '■ стоп', bg: '⚠ свернул вкладку', idle: '⚠ бездействие', offline: '⚠ закрыл приложение', logout: 'стоп (выход)' }[e.type] || e.type;
+      return '<div class="km-ev">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + ' — ' + lbl + (e.note ? ' · ' + esc(e.note) : '') + '</div>';
+    }).join('') || '<div class="km-muted">Нет событий</div>';
+  }
+
+  function addChecklist() {
+    const v = el('kmChkText').value.trim(); if (!v) return;
+    KM.doc.checklist.push({ id: uid(), text: v, done: false, ts: Date.now() });
+    el('kmChkText').value = '';
+    renderSheet(); kmPushSoon();
+  }
+  function addTask() {
+    const v = el('kmTaskText').value.trim(); if (!v) return;
+    KM.doc.tasks.push({ id: uid(), text: v, done: false, deadline: el('kmTaskDue').value || '', created: Date.now(), doneAt: null, result: '' });
+    el('kmTaskText').value = ''; el('kmTaskDue').value = '';
+    renderSheet(); kmPushSoon();
+  }
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest ? e.target.closest('[data-chk],[data-chkdel],[data-task],[data-taskdel]') : null;
+    if (!t || !KM.doc) return;
+    const chk = t.getAttribute('data-chk');
+    if (chk) { const it = KM.doc.checklist.find(x => x.id === chk); if (it) { it.done = t.checked; it.ts = Date.now(); renderSheet(); kmPushSoon(); } return; }
+    const chkd = t.getAttribute('data-chkdel');
+    if (chkd) { KM.doc.checklist = KM.doc.checklist.filter(x => x.id !== chkd); renderSheet(); kmPushSoon(); return; }
+    const tk = t.getAttribute('data-task');
+    if (tk) { const it = KM.doc.tasks.find(x => x.id === tk); if (it) { it.done = t.checked; it.doneAt = it.done ? Date.now() : null; renderSheet(); kmPushSoon(); } return; }
+    const tkd = t.getAttribute('data-taskdel');
+    if (tkd) { KM.doc.tasks = KM.doc.tasks.filter(x => x.id !== tkd); renderSheet(); kmPushSoon(); return; }
+  });
+
+  function kmStartTimer() {
+    if (KM.doc.timer && KM.doc.timer.running) return;
+    const topic = (el('kmTopic').value || '').trim();
+    KM.doc.timer = { running: true, startTs: Date.now(), topic: topic };
+    KM.lastActivity = Date.now();
+    logEvent('start', topic);
+    if (kmTimerId) clearInterval(kmTimerId);
+    kmTimerId = setInterval(kmTick, 1000);
+    kmTick();
+    el('kmStartBtn').style.display = 'none';
+    el('kmStopBtn').style.display = 'inline-block';
+    kmPushSoon();
+  }
+  function kmStopTimer(reason) {
+    if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
+    const startTs = KM.doc.timer.startTs, topic = KM.doc.timer.topic || 'Работа';
+    const endTs = Date.now();
+    if (endTs - startTs > 30000) {
+      KM.doc.entries.push({ id: uid(), date: today(), start: hhmm(startTs), end: hhmm(endTs), startTs: startTs, endTs: endTs, text: topic });
+    }
+    KM.doc.timer = null;
+    logEvent(reason === 'manual' ? 'stop' : reason, reason === 'manual' ? '' : 'таймер остановлен автоматически');
+    if (kmTimerId) { clearInterval(kmTimerId); kmTimerId = null; }
+    const sc = el('kmClock'); if (sc) sc.textContent = '00:00:00';
+    const sb = el('kmTimerSub'); if (sb) sb.textContent = '— таймер остановлен —';
+    const gb = el('kmStartBtn'), gs = el('kmStopBtn');
+    if (gb) gb.style.display = 'inline-block';
+    if (gs) gs.style.display = 'none';
+    renderSheet();
+    kmPushSoon();
+  }
+  function hhmm(ts) { const d = new Date(ts); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function kmTick() {
+    if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
+    const ms = Date.now() - KM.doc.timer.startTs;
+    const c = el('kmClock'); if (c) c.textContent = fmtClock(ms);
+    const s = el('kmTimerSub'); if (s) s.textContent = 'Работаю · ' + (KM.doc.timer.topic || 'без темы');
+    const d = el('kmDayTotal'); if (d) d.textContent = 'Итого за сегодня: ' + fmtDur(todayMs() + ms) + ' (включая текущий)';
+  }
+
+  function markActivity() { KM.lastActivity = Date.now(); }
+  ['pointerdown', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach(ev =>
+    window.addEventListener(ev, markActivity, { passive: true }));
+
+  function onVisibility() {
+    if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
+    if (document.visibilityState === 'hidden') kmStopTimer('bg');
+  }
+  document.addEventListener('visibilitychange', onVisibility);
+
+  function kmStartHeartbeat() {
+    kmStopHeartbeat();
+    KM.hbId = setInterval(kmHeartbeat, HEARTBEAT_MS);
+    KM.idleId = setInterval(() => {
+      if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
+      if (Date.now() - KM.lastActivity > IDLE_MS) kmStopTimer('idle');
+    }, 30000);
+    window.addEventListener('pagehide', () => {
+      if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('offline');
+      kmPushNow();
+    });
+    kmHeartbeat();
+  }
+  function kmStopHeartbeat() {
+    if (KM.hbId) { clearInterval(KM.hbId); KM.hbId = null; }
+    if (KM.idleId) { clearInterval(KM.idleId); KM.idleId = null; }
+  }
+  async function kmHeartbeat() {
+    if (!KM.row || !KM.doc) return;
+    KM.doc.lastSeen = Date.now();
+    const dot = el('kmOnlineDot'); if (dot) dot.style.color = '#22c55e';
+    try {
+      await pushDoc();
+      const n = el('kmNet'); if (n) n.textContent = 'синхр. ' + new Date().toLocaleTimeString('ru-RU');
+    } catch (e) {
+      const dot2 = el('kmOnlineDot'); if (dot2) dot2.style.color = '#ef4444';
+      const n = el('kmNet'); if (n) n.textContent = 'нет связи';
+    }
+  }
+  let pushTimer = null;
+  function kmPushSoon() {
+    if (!KM.row) return;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(kmPushNow, 1500);
+  }
+  async function kmPushNow() {
+    if (!KM.row || !KM.doc) return;
+    pushTimer = null;
+    try { KM.doc.lastSeen = Date.now(); await pushDoc(); } catch (e) {}
+  }
+
+  function buildAdminPanel() {
+    const panel = el('panel-km');
+    if (!panel) return;
+    panel.innerHTML =
+      '<div class="km-top">' +
+        '<div class="km-conn" id="kmConn">☁ облако не подключено</div>' +
+        '<button id="kmCfgBtn" class="km-btn">⚙ Настройки Supabase</button>' +
+        '<button id="kmRefreshBtn" class="km-btn">⟳ Обновить</button>' +
+      '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>➕ Добавить КМ в облако</span></div>' +
+        '<div class="km-row">' +
+          '<input id="kmNewName" class="km-input" placeholder="Имя КМ">' +
+          '<input id="kmNewPin" class="km-input km-due" inputmode="numeric" placeholder="ПИН (4–6 цифр)">' +
+          '<button class="km-btn" id="kmAddKmBtn">Добавить</button>' +
+        '</div>' +
+        '<div class="km-muted" id="kmAddMsg"></div>' +
+      '</div>' +
+      '<div id="kmAdminList" class="km-admin-list"></div>';
+    el('kmCfgBtn').onclick = openCfgModal;
+    el('kmRefreshBtn').onclick = () => kmRenderAdmin(true);
+    el('kmAddKmBtn').onclick = adminAddKm;
+  }
+
+  function openCfgModal() {
+    const w = ce('div', 'km-modal-bg');
+    w.innerHTML =
+      '<div class="km-modal">' +
+        '<h3>Настройки Supabase</h3>' +
+        '<p class="km-muted">Project URL и anon public key (Settings → API). Хранятся только в этом браузере.</p>' +
+        '<label>Project URL</label><input id="cfgUrl" class="km-input" placeholder="https://xxxx.supabase.co" value="' + esc(KM.cfg.url) + '">' +
+        '<label>anon public key</label><input id="cfgKey" class="km-input" placeholder="eyJhbGciOi..." value="' + esc(KM.cfg.key) + '">' +
+        '<div class="km-modal-btns"><button class="km-btn" id="cfgCancel">Отмена</button><button class="km-btn km-primary sm" id="cfgSave">Сохранить</button></div>' +
+      '</div>';
+    document.body.appendChild(w);
+    w.querySelector('#cfgCancel').onclick = () => w.remove();
+    w.querySelector('#cfgSave').onclick = () => {
+      KM.cfg = { url: w.querySelector('#cfgUrl').value.trim(), key: w.querySelector('#cfgKey').value.trim() };
+      cfgSave(); w.remove(); kmRenderAdmin(true);
+    };
+  }
+
+  async function adminAddKm() {
+    const name = el('kmNewName').value.trim();
+    const pin = el('kmNewPin').value.trim();
+    const msg = el('kmAddMsg');
+    if (!name || !pin) { msg.textContent = 'Укажите имя и ПИН'; return; }
+    if (!/^\d{4,6}$/.test(pin)) { msg.textContent = 'ПИН — 4–6 цифр'; return; }
+    const kmId = 'km_' + uid();
+    try {
+      const h = await pinHash(kmId, pin);
+      await rowUpsert({ km_id: kmId, name: name, pin_hash: h, doc: emptyDoc(), deleted: false });
+      el('kmNewName').value = ''; el('kmNewPin').value = '';
+      msg.textContent = 'Добавлен: ' + name;
+      kmRenderAdmin(true);
+    } catch (e) { msg.textContent = e.message; }
+  }
+
+  async function kmRenderAdmin() {
+    const conn = el('kmConn');
+    if (!conn) return;
+    if (!cfgReady()) { conn.textContent = '☁ облако не подключено — нажмите «Настройки Supabase»'; el('kmAdminList').innerHTML = ''; return; }
+    conn.textContent = '☁ подключено: ' + KM.cfg.url.replace(/^https?:\/\//, '').split('.')[0];
+    let rows;
+    try { rows = await api('km_state?select=*&order=name.asc'); }
+    catch (e) { conn.textContent = '⚠ ' + e.message; return; }
+    KM.adminRows = rows || [];
+    const now = Date.now();
+    el('kmAdminList').innerHTML = KM.adminRows.map(r => {
+      const doc = normDoc(r.doc);
+      const online = doc.lastSeen && (now - doc.lastSeen < ONLINE_MS);
+      const running = doc.timer && doc.timer.running;
+      const todayEntries = doc.entries.filter(x => x.date === today());
+      const ms = todayEntries.reduce((s, x) => s + (x.endTs - x.startTs), 0) + (running ? now - doc.timer.startTs : 0);
+      const chkDone = doc.checklist.filter(x => x.done).length;
+      const openTasks = doc.tasks.filter(x => !x.done).length;
+      const lastEv = doc.events[0];
+      const link = kmLink(r.km_id);
+      return '<div class="km-acard">' +
+        '<div class="km-acard-head">' +
+          '<span style="color:' + (online ? '#22c55e' : '#71717a') + '">●</span>' +
+          '<b>' + esc(r.name) + '</b>' +
+          (running ? '<span class="km-badge run">⏱ ' + fmtClock(now - doc.timer.startTs) + '</span>' : '') +
+          (online ? '<span class="km-badge on">онлайн</span>' : '<span class="km-badge off">офлайн</span>') +
+        '</div>' +
+        '<div class="km-acard-stats">' +
+          '<span>Сегодня: <b>' + fmtDur(ms) + '</b></span>' +
+          '<span>Чеклист: <b>' + chkDone + '/' + doc.checklist.length + '</b></span>' +
+          '<span>Задачи: <b>' + openTasks + '</b></span>' +
+        '</div>' +
+        (lastEv ? '<div class="km-acard-ev km-muted">посл. событие: ' + esc(lastEv.type) + '</div>' : '') +
+        '<div class="km-acard-actions">' +
+          '<button class="km-btn" data-copy="' + esc(link) + '">🔗 Ссылка для КМ</button>' +
+          '<button class="km-btn" data-show="' + esc(r.km_id) + '">👁 Лист</button>' +
+          '<button class="km-btn km-danger" data-delkm="' + esc(r.km_id) + '" data-name="' + esc(r.name) + '">🗑</button>' +
+        '</div>' +
+      '</div>';
+    }).join('') || '<div class="km-muted">Пока нет ни одного КМ</div>';
+  }
+
+  function kmLink(kmId) {
+    const base = location.origin + location.pathname;
+    return base + '#km?u=' + encodeURIComponent(KM.cfg.url) + '&k=' + encodeURIComponent(KM.cfg.key) + '&id=' + encodeURIComponent(kmId);
+  }
+
+  document.addEventListener('click', e => {
+    const c = e.target.closest ? e.target.closest('[data-copy],[data-delkm],[data-show]') : null;
+    if (!c) return;
+    const cp = c.getAttribute('data-copy');
+    if (cp) {
+      if (navigator.clipboard) navigator.clipboard.writeText(cp);
+      c.textContent = '✓ Скопировано';
+      setTimeout(() => { c.textContent = '🔗 Ссылка для КМ'; }, 1500);
+      return;
+    }
+    const dk = c.getAttribute('data-delkm');
+    if (dk) {
+      if (confirm('Удалить КМ «' + c.getAttribute('data-name') + '» из облака?')) {
+        rowDelete(dk).then(() => kmRenderAdmin()).catch(err => alert(err.message));
+      }
+      return;
+    }
+    const sh = c.getAttribute('data-show');
+    if (sh) {
+      const r = (KM.adminRows || []).find(x => x.km_id === sh);
+      if (r) kmAdminViewDoc(r);
+    }
+  });
+
+  function kmAdminViewDoc(r) {
+    const doc = normDoc(r.doc);
+    const entries = doc.entries.slice().sort((a, b) => b.startTs - a.startTs).slice(0, 30);
+    const w = ce('div', 'km-modal-bg');
+    w.innerHTML =
+      '<div class="km-modal km-modal-wide">' +
+        '<h3>' + esc(r.name) + '</h3>' +
+        '<div class="km-view-sec"><b>Чеклист</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>Задачи</b><br>' + (doc.tasks.map(x => (x.done ? '☑ ' : '☐ ') + esc(x.text) + (x.deadline ? ' (до ' + esc(x.deadline) + ')' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>Время (последние записи)</b><br>' + (entries.map(x => esc(x.date) + ' ' + esc(x.start) + '–' + esc(x.end) + ' · ' + fmtDur(x.endTs - x.startTs) + ' · ' + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>События</b><br>' + (doc.events.slice(0, 20).map(e => esc(e.type) + ' ' + new Date(e.ts).toLocaleString('ru-RU')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-modal-btns"><button class="km-btn" id="vClose">Закрыть</button></div>' +
+      '</div>';
+    document.body.appendChild(w);
+    w.querySelector('#vClose').onclick = () => w.remove();
+  }
+
+  function hideAdminApp() {
+    const c = document.querySelector('.container');
+    if (c) c.style.display = 'none';
+    const st = el('autosaveStatus'); if (st) st.style.display = 'none';
+  }
+
+  function kmAdminTabButton() {
+    const tabs = document.querySelector('.tabs');
+    if (!tabs || tabs.querySelector('[data-tab="km"]')) return;
+    const b = ce('button', '', '🛰 КМ-листы');
+    b.setAttribute('data-tab', 'km');
+    tabs.appendChild(b);
+  }
+  function hookAdminTab() {
+    const btn = document.querySelector('.tabs [data-tab="km"]');
+    if (!btn) return;
+    btn.addEventListener('click', () => { kmRenderAdmin(); startAdminPoll(); });
+  }
+  function startAdminPoll() {
+    if (KM.pollId) clearInterval(KM.pollId);
+    KM.pollId = setInterval(() => {
+      const active = document.querySelector('.tabs button.active');
+      if (active && active.dataset.tab === 'km') kmRenderAdmin();
+    }, 30000);
+  }
+
+  function init() {
+    cfgLoad();
+    KM.mode = kmIsMode();
+    if (KM.mode) {
+      hideAdminApp();
+      buildShell();
+      kmRoot.style.display = 'block';
+      const p = parseHash();
+      kmShowLogin(p.id || '');
+      return;
+    }
+    kmAdminTabButton();
+    hookAdminTab();
+    buildAdminPanel();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
 </script>
 </body>
 </html>
