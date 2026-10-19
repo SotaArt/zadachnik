@@ -709,6 +709,32 @@
   .km-alarm button { background: #6366f1; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; cursor: pointer; }
   .km-alarm-dot { position: absolute; top: -8px; right: -8px; background: #ef4444; color: #fff; border-radius: 999px;
     font-size: 11px; padding: 1px 6px; }
+  .km-primary:disabled, .km-btn:disabled, .km-stop:disabled { opacity: .45; cursor: not-allowed; }
+  .km-card-head { cursor: pointer; user-select: none; }
+  .km-caret { display: inline-block; color: #71717a; font-size: 12px; margin-left: 8px; transition: transform .15s; }
+  .km-card.collapsed > :not(.km-card-head) { display: none; }
+  .km-card.collapsed .km-caret { transform: rotate(-90deg); }
+  .km-req { border-color: #fb7185 !important; box-shadow: 0 0 0 2px rgba(251,113,133,.25); }
+  .km-task-item { display: flex; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid #2a2a3c; font-size: 14px; }
+  .km-task-item .km-rem-text { flex: 1; }
+  .km-icon { background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 14px; padding: 2px 4px; }
+  .km-icon:hover { color: #e4e4e7; }
+  .km-comment { width: 100%; margin-top: 8px; min-height: 38px; resize: vertical; font-family: inherit; }
+  .km-call-live { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px;
+    border: 1px dashed #3f3f56; border-radius: 8px; margin-top: 8px; }
+  .km-call-live .km-call-timer { font-family: ui-monospace, monospace; color: #fbbf24; min-width: 58px; }
+  .km-call-live .km-input { flex: 1; min-width: 140px; padding: 7px 9px; }
+  .km-call-mark { display: flex; gap: 4px; }
+  .km-call-mark button { background: #3f3f56; border: none; color: #e4e4e7; border-radius: 6px; padding: 5px 9px; cursor: pointer; }
+  .km-call-mark button.ok.active { background: #16a34a; }
+  .km-call-mark button.fail.active { background: #dc2626; }
+  .km-call-item { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 0;
+    border-bottom: 1px solid #2a2a3c; font-size: 13px; }
+  .km-call-item .cl-time { color: #a1a1aa; }
+  .km-call-item .cl-dur { color: #4ade80; font-weight: 600; }
+  .km-call-item .cl-mark { min-width: 20px; text-align: center; }
+  .km-call-item .km-input { flex: 1; min-width: 140px; padding: 5px 8px; font-size: 13px; }
+  .km-call-hint { font-size: 12px; color: #a1a1aa; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -1191,7 +1217,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 34,
+    version: 35,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4521,6 +4547,7 @@ newText.focus();
   const KM_DESC = 'Задачник КМ';
   const META_FILE = '_meta.json';
   const REM_FILE = '_reminders.json';
+  const TASK_FILE = '_tasks.json';
   const IDLE_MS = 10 * 60 * 1000;
   const HEARTBEAT_MS = 30 * 1000;
   const ONLINE_MS = 90 * 1000;
@@ -4541,12 +4568,15 @@ newText.focus();
     roster: [],
     adminRows: [],
     reminders: [],
+    adminTasks: [],
     pollId: null,
     hbId: null,
     idleId: null,
     lastActivity: Date.now(),
     pagehideBound: false,
-    _remoteChecklist: null
+    _remoteChecklist: null,
+    _adminTasks: undefined,
+    _callMark: null
   };
   window.__KM = KM;
 
@@ -4679,6 +4709,15 @@ newText.focus();
   async function remindersPut(list) {
     await gistPatch({ [REM_FILE]: { content: JSON.stringify(list, null, 2) } });
   }
+  async function tasksGet() {
+    const g = await gistGet();
+    const f = (g.files || {})[TASK_FILE];
+    if (!f || !f.content) return null;
+    try { const a = JSON.parse(f.content); return Array.isArray(a) ? a : []; } catch (e) { return null; }
+  }
+  async function tasksPut(list) {
+    await gistPatch({ [TASK_FILE]: { content: JSON.stringify(list, null, 2) } });
+  }
   async function gistSetup(token) {
     const res = await fetch('https://api.github.com/user', {
       headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
@@ -4756,7 +4795,7 @@ newText.focus();
 
   /* ============ doc helpers ============ */
   function emptyDoc() {
-    return { checklist: [], entries: [], events: [], fired: [], timer: null, lastSeen: Date.now(), day: today() };
+    return { checklist: [], entries: [], events: [], fired: [], calls: [], call: null, timer: null, lastSeen: Date.now(), day: today() };
   }
   function normDoc(d) {
     const e = emptyDoc();
@@ -4766,6 +4805,8 @@ newText.focus();
       entries: Array.isArray(d.entries) ? d.entries : [],
       events: Array.isArray(d.events) ? d.events : [],
       fired: Array.isArray(d.fired) ? d.fired : [],
+      calls: Array.isArray(d.calls) ? d.calls : [],
+      call: d.call && typeof d.call === 'object' ? d.call : null,
       timer: d.timer || null, lastSeen: d.lastSeen || Date.now(), day: d.day || today()
     };
   }
@@ -4783,12 +4824,19 @@ newText.focus();
     KM.doc.events = KM.doc.events.slice(0, 200);
   }
   function kmMergeChecklist() {
-    const remote = KM._remoteChecklist;
-    if (!remote) return;
+    if (!Array.isArray(KM._adminTasks)) return;
+    const remote = KM._adminTasks;
     const own = KM.doc.checklist.filter(x => x.by !== 'admin');
-    const admins = remote.filter(x => x.by === 'admin').map(a => {
+    const admins = remote.map(a => {
       const l = KM.doc.checklist.find(x => x.id === a.id);
-      return l ? Object.assign({}, a, { done: l.done, doneTs: l.doneTs }) : a;
+      return {
+        id: a.id,
+        text: a.text,
+        by: 'admin',
+        done: l ? !!l.done : false,
+        doneTs: l ? (l.doneTs || null) : null,
+        ts: a.created || Date.now()
+      };
     });
     KM.doc.checklist = admins.concat(own);
   }
@@ -4883,53 +4931,162 @@ newText.focus();
     kmShowLogin();
   }
 
+  function updateStartState() {
+    const topic = el('kmTopic'), btn = el('kmStartBtn');
+    if (!topic || !btn || !KM.doc) return;
+    const running = !!(KM.doc.timer && KM.doc.timer.running);
+    if (!running) btn.disabled = !topic.value.trim();
+  }
+
   function kmShowSheet() {
     el('kmLogoutBtn').style.display = 'inline-block';
     const body = el('kmBody');
     body.innerHTML =
       '<div class="km-name" id="kmName"></div>' +
-      '<div class="km-card km-timer">' +
+      '<div class="km-card km-timer" id="kmTimerCard">' +
+        '<div class="km-card-head"><span>⏱ Задача дня</span><span class="km-caret">▾</span></div>' +
         '<div class="km-timer-clock" id="kmClock">00:00:00</div>' +
         '<div class="km-timer-sub" id="kmTimerSub">— таймер остановлен —</div>' +
         '<input id="kmTopic" class="km-input" placeholder="Какую задачу делаю?" autocomplete="off">' +
+        '<textarea id="kmTaskComment" class="km-input km-comment" placeholder="Что сделано / результат (обязательно при остановке, если не было звонков)"></textarea>' +
         '<div class="km-timer-btns">' +
           '<button class="km-primary" id="kmStartBtn">▶ Старт задачи</button>' +
           '<button class="km-stop" id="kmStopBtn" style="display:none">■ Стоп</button>' +
         '</div>' +
         '<div class="km-stats" id="kmStats"></div>' +
       '</div>' +
+      '<div class="km-card" id="kmCallsCard">' +
+        '<div class="km-card-head"><span>📞 Звонки <span class="km-muted" id="kmCallsSum"></span></span><span class="km-caret">▾</span></div>' +
+        '<div class="km-call-live">' +
+          '<span class="km-muted" id="kmCallNum">— нет звонка —</span>' +
+          '<span class="km-call-timer" id="kmCallTimer"></span>' +
+          '<div class="km-call-mark" id="kmCallMarkBox">' +
+            '<button class="ok" data-callmark="ok" title="Есть диалог">✅</button>' +
+            '<button class="fail" data-callmark="fail" title="Отказ или иная причина">❌</button>' +
+          '</div>' +
+          '<button class="km-btn" id="kmCallStartBtn">▶ Набор</button>' +
+          '<button class="km-btn km-danger" id="kmCallStopBtn" style="display:none">⏹ Отбой</button>' +
+          '<input id="kmCallNote" class="km-input" placeholder="Комментарий по звонку…">' +
+        '</div>' +
+        '<div id="kmCallList" class="km-list"></div>' +
+        '<div class="km-call-hint" id="kmCallHint"></div>' +
+      '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>✅ Чеклист дня</span></div>' +
+        '<div class="km-card-head"><span>✅ Чеклист дня</span><span class="km-caret">▾</span></div>' +
         '<div class="km-row"><input id="kmChkText" class="km-input" placeholder="Добавить свою задачу…"><button class="km-btn" id="kmChkAdd">+</button></div>' +
         '<div id="kmChkList" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>⏱ Моё время сегодня <span id="kmEntriesSum" class="km-muted"></span></span></div>' +
+        '<div class="km-card-head"><span>⏱ Моё время сегодня <span id="kmEntriesSum" class="km-muted"></span></span><span class="km-caret">▾</span></div>' +
         '<div id="kmEntries" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card" id="kmRemCard">' +
-        '<div class="km-card-head"><span>⏰ Напоминания на сегодня</span></div>' +
+        '<div class="km-card-head"><span>⏰ Напоминания на сегодня</span><span class="km-caret">▾</span></div>' +
         '<div id="kmRemView" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card km-events-card">' +
-        '<div class="km-card-head"><span>🛡 Активность / антифрод</span></div>' +
+        '<div class="km-card-head"><span>🛡 Активность / антифрод</span><span class="km-caret">▾</span></div>' +
         '<div id="kmEvents" class="km-list"></div>' +
       '</div>';
 
     el('kmName').textContent = KM.name;
     el('kmStartBtn').onclick = kmStartTimer;
     el('kmStopBtn').onclick = () => kmStopTimer('manual');
+    el('kmTopic').addEventListener('input', updateStartState);
+    el('kmCallStartBtn').onclick = kmCallStart;
+    el('kmCallStopBtn').onclick = kmCallStop;
+    el('kmCallNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); kmCallStop(); } });
+    Array.prototype.forEach.call(document.querySelectorAll('#kmCallMarkBox [data-callmark]'), b => {
+      b.onclick = () => kmSetCallMark(b.getAttribute('data-callmark'));
+    });
     el('kmChkAdd').onclick = addChecklist;
     el('kmChkText').addEventListener('keydown', e => { if (e.key === 'Enter') addChecklist(); });
     if (KM.doc.timer && KM.doc.timer.running) {
       el('kmStartBtn').style.display = 'none';
       el('kmStopBtn').style.display = 'inline-block';
       el('kmTopic').value = KM.doc.timer.topic || '';
+      el('kmTopic').disabled = true;
       kmTick();
       kmTimerId = setInterval(kmTick, 1000);
+    } else {
+      updateStartState();
     }
     renderSheet();
     renderRemView();
+    renderCalls();
+  }
+
+  function todaysCalls() {
+    if (!KM.doc || !Array.isArray(KM.doc.calls)) return [];
+    return KM.doc.calls.filter(c => c.date === today());
+  }
+
+  function renderCalls() {
+    if (!KM.doc) return;
+    const running = !!(KM.doc.timer && KM.doc.timer.running);
+    const call = KM.doc.call;
+    const calls = todaysCalls();
+    const num = el('kmCallNum'), timer = el('kmCallTimer');
+    const startB = el('kmCallStartBtn'), stopB = el('kmCallStopBtn');
+    const note = el('kmCallNote'), hint = el('kmCallHint');
+    if (num) num.textContent = call ? ('Звонок #' + (calls.length + 1)) : '— нет звонка —';
+    if (timer) timer.textContent = call ? fmtClock(Math.max(0, Date.now() - call.startTs)) : '';
+    if (startB) { startB.style.display = call ? 'none' : 'inline-block'; startB.disabled = !running; }
+    if (stopB) stopB.style.display = call ? 'inline-block' : 'none';
+    if (note) note.disabled = !call;
+    const mark = call ? (call.mark || '') : '';
+    Array.prototype.forEach.call(document.querySelectorAll('#kmCallMarkBox [data-callmark]'), b => {
+      b.classList.toggle('active', b.getAttribute('data-callmark') === mark);
+    });
+    if (hint) hint.textContent = running
+      ? 'Статус и комментарий сохраняются при «Отбое».'
+      : 'Сначала нажмите «▶ Старт задачи» — звонки доступны во время задачи.';
+    const list = el('kmCallList');
+    if (list) {
+      list.innerHTML = calls.length ? calls.slice().reverse().map(c =>
+        '<div class="km-call-item">' +
+          '<span class="cl-mark">' + (c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪') + '</span>' +
+          '<span class="cl-time">' + hhmm(c.startTs) + '–' + hhmm(c.endTs) + '</span>' +
+          '<span class="cl-dur">' + fmtDur(c.endTs - c.startTs) + '</span>' +
+          '<input class="km-input" data-callnote="' + esc(c.id) + '" value="' + esc(c.note || '') + '" placeholder="Комментарий…">' +
+          '<button class="km-icon" data-callmark2="' + esc(c.id) + '" title="Сменить статус">' + (c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪') + '</button>' +
+          '<button class="km-del" data-calldel="' + esc(c.id) + '">✕</button>' +
+        '</div>').join('') : '<div class="km-muted">Звонков за сегодня нет</div>';
+    }
+    const sum = el('kmCallsSum');
+    if (sum) sum.textContent = calls.length ? '— ' + calls.length : '';
+  }
+
+  function kmSetCallMark(mark) {
+    KM._callMark = mark;
+    if (KM.doc.call) { KM.doc.call.mark = mark; kmPushSoon(); }
+    renderCalls();
+  }
+
+  function kmCallStart() {
+    if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running || KM.doc.call) return;
+    KM.doc.call = { startTs: Date.now(), mark: KM._callMark || null };
+    logEvent('call_start', KM.doc.timer.topic || '');
+    renderCalls();
+    kmPushSoon();
+  }
+
+  function kmCallStop() {
+    if (!KM.doc || !KM.doc.call) return;
+    const c = KM.doc.call;
+    const endTs = Date.now();
+    const noteEl = el('kmCallNote');
+    const note = noteEl ? noteEl.value.trim() : '';
+    if (endTs - c.startTs >= 0) {
+      KM.doc.calls.push({ id: uid(), date: today(), startTs: c.startTs, endTs: endTs,
+        mark: c.mark || null, note: note, task: KM.doc.timer ? (KM.doc.timer.topic || '') : '' });
+    }
+    KM.doc.call = null;
+    KM._callMark = null;
+    if (noteEl) noteEl.value = '';
+    logEvent('call_stop', (c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪') + (note ? ' · ' + note : ''));
+    renderCalls();
+    kmPushSoon();
   }
 
   function renderStats() {
@@ -4942,7 +5099,8 @@ newText.focus();
       '<span>Рабочее окно <b>' + pad2(WIN_START) + ':00–' + pad2(WIN_END) + ':00</b></span>' +
       '<span>Норма <b>' + fmtDur(norm) + '</b></span>' +
       '<span>Отработано <b>' + fmtDur(worked) + '</b></span>' +
-      '<span class="' + (unused > 0 ? 'neg' : '') + '">Не использовано <b>' + fmtDur(unused) + '</b></span>';
+      '<span class="' + (unused > 0 ? 'neg' : '') + '">Не использовано <b>' + fmtDur(unused) + '</b></span>' +
+      '<span>Звонков <b>' + todaysCalls().length + '</b></span>';
   }
 
   function renderSheet() {
@@ -4953,13 +5111,13 @@ newText.focus();
       return '<div class="km-item' + (it.done ? ' done' : '') + '">' +
         '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '>' +
         '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + '</span></label>' +
-        (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '">✕</button>') +
+        (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '" data-text="' + esc(it.text) + '">✕</button>') +
       '</div>';
     }).join('') : '<div class="km-muted">Пока пусто</div>';
     const en = el('kmEntries');
     const todays = KM.doc.entries.filter(x => x.date === today()).sort((a, b) => b.startTs - a.startTs);
     if (en) en.innerHTML = todays.length ? todays.map(x =>
-      '<div class="km-item"><span>' + esc(x.start) + '–' + esc(x.end) + '</span><span class="km-muted">' + fmtDur(x.endTs - x.startTs) + '</span><span>' + esc(x.text) + '</span></div>'
+      '<div class="km-item"><span>' + esc(x.start) + '–' + esc(x.end) + '</span><span class="km-muted">' + fmtDur(x.endTs - x.startTs) + '</span><span>' + esc(x.text) + (x.note ? ' · ' + esc(x.note) : '') + '</span></div>'
     ).join('') : '<div class="km-muted">Записей за сегодня нет</div>';
     const es = el('kmEntriesSum'); if (es) es.textContent = '— ' + fmtDur(todayMs());
     const ev = el('kmEvents');
@@ -4995,7 +5153,7 @@ newText.focus();
   }
 
   document.addEventListener('click', e => {
-    const t = e.target.closest ? e.target.closest('[data-chk],[data-chkdel]') : null;
+    const t = e.target.closest ? e.target.closest('[data-chk],[data-chkdel],[data-calldel]') : null;
     if (!t || !KM.doc) return;
     const chk = t.getAttribute('data-chk');
     if (chk) {
@@ -5004,12 +5162,60 @@ newText.focus();
       return;
     }
     const chkd = t.getAttribute('data-chkdel');
-    if (chkd) { KM.doc.checklist = KM.doc.checklist.filter(x => x.id !== chkd); renderSheet(); kmPushSoon(); }
+    if (chkd) {
+      if (!e.target.closest || !e.target.closest('.km-del')) return;
+      const it = KM.doc.checklist.find(x => x.id === chkd);
+      const label = (it && it.text) ? it.text : (t.getAttribute('data-text') || 'этот пункт');
+      if (!confirm('Удалить пункт «' + label + '»?')) return;
+      KM.doc.checklist = KM.doc.checklist.filter(x => x.id !== chkd);
+      renderSheet(); kmPushSoon(); return;
+    }
+    const cd = t.getAttribute('data-calldel');
+    if (cd) {
+      if (!e.target.closest || !e.target.closest('.km-del')) return;
+      if (!confirm('Удалить этот звонок?')) return;
+      KM.doc.calls = KM.doc.calls.filter(x => x.id !== cd); renderCalls(); kmPushSoon();
+    }
+  });
+
+  document.addEventListener('click', e => {
+    const m = e.target.closest ? e.target.closest('[data-callmark2]') : null;
+    if (!m || !KM.doc) return;
+    const id = m.getAttribute('data-callmark2');
+    const c = KM.doc.calls.find(x => x.id === id);
+    if (!c) return;
+    c.mark = c.mark === 'ok' ? 'fail' : c.mark === 'fail' ? null : 'ok';
+    renderCalls(); kmPushSoon();
+  });
+
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (!t || !t.getAttribute || !KM.doc) return;
+    const id = t.getAttribute('data-callnote');
+    if (!id) return;
+    const c = KM.doc.calls.find(x => x.id === id);
+    if (c) { c.note = t.value; kmPushSoon(); }
+  });
+
+  document.addEventListener('click', e => {
+    const h = e.target.closest ? e.target.closest('.km-card-head') : null;
+    if (!h || !KM.mode) return;
+    const card = h.parentElement;
+    if (!card || !card.classList || !card.classList.contains('km-card')) return;
+    card.classList.toggle('collapsed');
   });
 
   function kmStartTimer() {
-    if (KM.doc.timer && KM.doc.timer.running) return;
-    const topic = (el('kmTopic').value || '').trim();
+    if (!KM.doc || (KM.doc.timer && KM.doc.timer.running)) return;
+    const tEl = el('kmTopic');
+    const topic = (tEl ? tEl.value : '').trim();
+    if (!topic) {
+      if (tEl) { tEl.classList.add('km-req'); tEl.focus(); }
+      return;
+    }
+    if (tEl) { tEl.classList.remove('km-req'); tEl.disabled = true; }
+    const cEl = el('kmTaskComment');
+    if (cEl) { cEl.value = ''; cEl.classList.remove('km-req'); }
     KM.doc.timer = { running: true, startTs: Date.now(), topic: topic };
     KM.lastActivity = Date.now();
     logEvent('start', topic);
@@ -5018,24 +5224,47 @@ newText.focus();
     kmTick();
     el('kmStartBtn').style.display = 'none';
     el('kmStopBtn').style.display = 'inline-block';
+    renderCalls();
     kmPushSoon();
   }
   function kmStopTimer(reason) {
     if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
     const startTs = KM.doc.timer.startTs, topic = KM.doc.timer.topic || 'Задача';
+    const cEl = el('kmTaskComment');
+    const comment = cEl ? cEl.value.trim() : '';
+    const hadCalls = (KM.doc.calls || []).some(x => x.startTs >= startTs);
+    if (reason === 'manual' && !comment && !hadCalls) {
+      if (cEl) { cEl.classList.add('km-req'); cEl.focus(); }
+      return;
+    }
     const endTs = Date.now();
+    if (KM.doc.call) {
+      const cc = KM.doc.call;
+      const nEl = el('kmCallNote');
+      if (endTs - cc.startTs >= 0) {
+        KM.doc.calls.push({ id: uid(), date: today(), startTs: cc.startTs, endTs: endTs,
+          mark: cc.mark || null, note: nEl ? nEl.value.trim() : '', task: topic });
+      }
+      KM.doc.call = null; KM._callMark = null;
+      if (nEl) nEl.value = '';
+    }
     if (endTs - startTs > 30000) {
-      KM.doc.entries.push({ id: uid(), date: today(), start: hhmm(startTs), end: hhmm(endTs), startTs: startTs, endTs: endTs, text: topic });
+      KM.doc.entries.push({ id: uid(), date: today(), start: hhmm(startTs), end: hhmm(endTs),
+        startTs: startTs, endTs: endTs, text: topic, note: comment });
     }
     KM.doc.timer = null;
-    logEvent(reason === 'manual' ? 'stop' : reason, reason === 'manual' ? '' : 'таймер остановлен автоматически');
+    logEvent(reason === 'manual' ? 'stop' : reason, reason === 'manual' ? comment : 'таймер остановлен автоматически');
     if (kmTimerId) { clearInterval(kmTimerId); kmTimerId = null; }
+    if (cEl) { cEl.value = ''; cEl.classList.remove('km-req'); }
+    const tEl = el('kmTopic'); if (tEl) tEl.disabled = false;
     const sc = el('kmClock'); if (sc) sc.textContent = '00:00:00';
     const sb = el('kmTimerSub'); if (sb) sb.textContent = '— таймер остановлен —';
     const gb = el('kmStartBtn'), gs = el('kmStopBtn');
     if (gb) gb.style.display = 'inline-block';
     if (gs) gs.style.display = 'none';
+    updateStartState();
     renderSheet();
+    renderCalls();
     kmPushSoon();
   }
   function hhmm(ts) { const d = new Date(ts); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
@@ -5044,6 +5273,8 @@ newText.focus();
     const ms = Date.now() - KM.doc.timer.startTs;
     const c = el('kmClock'); if (c) c.textContent = fmtClock(ms);
     const s = el('kmTimerSub'); if (s) s.textContent = 'Работаю · ' + (KM.doc.timer.topic || 'без темы');
+    const ct = el('kmCallTimer');
+    if (ct) ct.textContent = KM.doc.call ? fmtClock(Math.max(0, Date.now() - KM.doc.call.startTs)) : '';
     renderStats();
   }
 
@@ -5083,6 +5314,7 @@ newText.focus();
     const dot = el('kmOnlineDot'); if (dot) dot.style.color = '#22c55e';
     try {
       await kmFetchReminders();
+      await kmFetchTasks();
       await kmPushNow();
       const n = el('kmNet'); if (n) n.textContent = 'синхр. ' + new Date().toLocaleTimeString('ru-RU');
       checkReminders();
@@ -5104,14 +5336,26 @@ newText.focus();
       KM.doc.lastSeen = Date.now();
       let rec = null;
       try { rec = await kmGet(KM.kmId); } catch (e) {}
-      KM._remoteChecklist = rec && rec.doc && Array.isArray(rec.doc.checklist) ? rec.doc.checklist : [];
+      let at = null;
+      try { at = await tasksGet(); } catch (e) {}
+      KM._adminTasks = at;
+      if (at === null) KM._adminTasks = [];
       kmMergeChecklist();
       await kmPut({ id: KM.kmId, name: KM.name, pin: KM.pin, pinHash: KM.pinHash, doc: KM.doc });
-      KM._remoteChecklist = null;
+      renderSheet();
     } catch (e) {}
   }
 
   /* ============ напоминания / будильники ============ */
+  async function kmFetchTasks() {
+    if (!cfgReady()) return;
+    try {
+      const list = await tasksGet();
+      KM.adminTasks = Array.isArray(list) ? list : [];
+      KM._adminTasks = KM.adminTasks;
+      if (KM.doc) { kmMergeChecklist(); renderSheet(); }
+    } catch (e) {}
+  }
   async function kmFetchReminders() {
     if (!cfgReady()) return;
     try {
@@ -5188,7 +5432,7 @@ newText.focus();
         '<button id="kmRefreshBtn" class="km-btn">⟳ Обновить</button>' +
       '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>➕ Добавить КМ</span></div>' +
+        '<div class="km-card-head"><span>➕ Добавить КМ</span><span class="km-caret">▾</span></div>' +
         '<div class="km-row">' +
           '<input id="kmNewName" class="km-input" placeholder="Имя КМ">' +
           '<input id="kmNewPin" class="km-input km-due" inputmode="numeric" placeholder="ПИН (4–6 цифр)">' +
@@ -5197,16 +5441,17 @@ newText.focus();
         '<div class="km-muted" id="kmAddMsg"></div>' +
       '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>✅ Задача в чеклист дня</span></div>' +
+        '<div class="km-card-head"><span>✅ Задача в чеклист дня</span><span class="km-caret">▾</span></div>' +
         '<div class="km-row">' +
           '<input id="kmAdminTaskText" class="km-input" placeholder="Например: сдать срез к 18:00">' +
           '<button class="km-btn" id="kmAdminTaskBtn">Назначить</button>' +
         '</div>' +
         '<div class="km-targets" id="kmTaskTargets"></div>' +
         '<div class="km-muted" id="kmTaskMsg"></div>' +
+        '<div id="kmTaskAdminList" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>⏰ Напоминания (будильники)</span></div>' +
+        '<div class="km-card-head"><span>⏰ Напоминания (будильники)</span><span class="km-caret">▾</span></div>' +
         '<div class="km-row">' +
           '<input id="kmRemTime" type="time" class="km-input km-due" value="18:00">' +
           '<input id="kmRemText" class="km-input" placeholder="Текст напоминания">' +
@@ -5304,24 +5549,50 @@ newText.focus();
     const msg = el('kmTaskMsg');
     if (!text) { msg.textContent = 'Введите текст задачи'; return; }
     if (!sel.length) { msg.textContent = 'Выберите кому назначить (отметьте КМ или «Всем»)'; return; }
+    if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
     const ids = sel === 'all' ? KM.adminRows.map(r => r.id) : sel;
     if (!ids.length) { msg.textContent = 'Нет КМ в списке'; return; }
     msg.textContent = 'Отправка…';
-    let ok = 0;
-    for (let i = 0; i < ids.length; i++) {
-      try {
-        const rec = await kmGet(ids[i]);
-        if (!rec) continue;
-        rec.doc = rec.doc && typeof rec.doc === 'object' ? rec.doc : {};
-        rec.doc.checklist = Array.isArray(rec.doc.checklist) ? rec.doc.checklist : [];
-        rec.doc.checklist.unshift({ id: uid(), text: text, done: false, ts: Date.now(), by: 'admin' });
-        await kmPut(rec);
-        ok++;
-      } catch (e) {}
-    }
-    el('kmAdminTaskText').value = '';
-    msg.textContent = 'Назначено «' + text + '» → ' + targetNames(sel) + ' (' + ok + ' из ' + ids.length + ')';
-    kmRenderAdmin(true);
+    try {
+      const list = await tasksGet() || [];
+      list.unshift({ id: uid(), text: text, kmIds: sel, created: Date.now() });
+      await tasksPut(list);
+      for (let i = 0; i < ids.length; i++) {
+        try {
+          const rec = await kmGet(ids[i]);
+          if (!rec) continue;
+          rec.doc = normDoc(rec.doc);
+          rec.doc.checklist = rec.doc.checklist.filter(x => x.by !== 'admin');
+          await kmPut(rec);
+        } catch (e) {}
+      }
+      el('kmAdminTaskText').value = '';
+      msg.textContent = 'Назначено «' + text + '» → ' + targetNames(sel);
+      kmRenderAdmin(true);
+    } catch (e) { msg.textContent = e.message; }
+  }
+
+  async function adminEditTask(id) {
+    try {
+      const list = await tasksGet() || [];
+      const it = list.find(x => x.id === id);
+      if (!it) return;
+      const nt = prompt('Текст задачи:', it.text);
+      if (nt === null) return;
+      const t = nt.trim();
+      if (!t) return;
+      it.text = t;
+      await tasksPut(list);
+      kmRenderAdmin(true);
+    } catch (e) { alert(e.message); }
+  }
+
+  async function adminDelTask(id) {
+    try {
+      const list = await tasksGet() || [];
+      await tasksPut(list.filter(x => x.id !== id));
+      kmRenderAdmin(true);
+    } catch (e) { alert(e.message); }
   }
 
   async function adminAddReminder() {
@@ -5343,9 +5614,26 @@ newText.focus();
   }
 
   async function adminDelReminder(remId) {
+    if (!confirm('Удалить это напоминание?')) return;
     try {
       const list = await remindersGet();
       await remindersPut(list.filter(r => r.id !== remId));
+      kmRenderAdmin(true);
+    } catch (e) { alert(e.message); }
+  }
+
+  async function adminEditReminder(remId) {
+    try {
+      const list = await remindersGet();
+      const r = list.find(x => x.id === remId);
+      if (!r) return;
+      const nt = prompt('Время (ЧЧ:ММ):', r.time);
+      if (nt === null) return;
+      if (!/^\d{2}:\d{2}$/.test(nt.trim())) { alert('Формат времени — ЧЧ:ММ'); return; }
+      const nx = prompt('Текст напоминания:', r.text);
+      if (nx === null) return;
+      r.time = nt.trim(); r.text = nx.trim() || r.text;
+      await remindersPut(list);
       kmRenderAdmin(true);
     } catch (e) { alert(e.message); }
   }
@@ -5361,24 +5649,35 @@ newText.focus();
       return;
     }
     conn.textContent = '☁ подключено: ' + (KM.cfg.login ? KM.cfg.login + ' · ' : '') + 'gist ' + KM.cfg.gistId.slice(0, 8);
-    let rows, rems;
+    let rows, rems, tks;
     try {
       const g = await gistGet();
       rows = parseFiles(g);
       const rf = (g.files || {})[REM_FILE];
       rems = (rf && rf.content) ? (JSON.parse(rf.content) || []) : [];
       if (!Array.isArray(rems)) rems = [];
+      tks = await tasksGet(); if (!Array.isArray(tks)) tks = [];
     } catch (e) { conn.textContent = '⚠ ' + e.message; return; }
     KM.adminRows = rows || [];
     KM.reminders = rems;
+    KM.adminTasks = tks;
     renderTargets('kmTaskTargets');
     renderTargets('kmRemTargets');
+
+    el('kmTaskAdminList').innerHTML = tks.length ? tks.map(r =>
+      '<div class="km-task-item">' +
+        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
+        '<button class="km-icon" data-edittask="' + esc(r.id) + '" title="Изменить">✏️</button>' +
+        '<button class="km-del" data-deltask="' + esc(r.id) + '">✕</button>' +
+      '</div>').join('') : '<div class="km-muted">Нет назначенных задач</div>';
 
     el('kmRemAdminList').innerHTML = rems.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r =>
       '<div class="km-rem-item">' +
         '<span class="km-rem-time">' + esc(r.time) + '</span>' +
         '<span class="km-rem-text">' + esc(r.text) + '</span>' +
         '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
+        '<button class="km-icon" data-editrem="' + esc(r.id) + '" title="Изменить">✏️</button>' +
         '<button class="km-del" data-delrem="' + esc(r.id) + '">✕</button>' +
       '</div>').join('') || '<div class="km-muted">Нет напоминаний</div>';
 
@@ -5428,11 +5727,25 @@ newText.focus();
   });
 
   document.addEventListener('click', e => {
-    const c = e.target.closest ? e.target.closest('[data-copy],[data-delkm],[data-show],[data-delrem]') : null;
+    if (KM.mode) return;
+    const h = e.target.closest ? e.target.closest('#panel-km .km-card-head') : null;
+    if (!h) return;
+    const card = h.parentElement;
+    if (card && card.classList && card.classList.contains('km-card')) card.classList.toggle('collapsed');
+  });
+
+  document.addEventListener('click', e => {
+    const c = e.target.closest ? e.target.closest('[data-copy],[data-delkm],[data-show],[data-delrem],[data-edittask],[data-deltask],[data-editrem]') : null;
     if (!c) return;
     const dr = c.getAttribute('data-delrem');
-    if (dr) {
-      if (confirm('Удалить это напоминание?')) adminDelReminder(dr);
+    if (dr) { adminDelReminder(dr); return; }
+    const er = c.getAttribute('data-editrem');
+    if (er) { adminEditReminder(er); return; }
+    const et = c.getAttribute('data-edittask');
+    if (et) { adminEditTask(et); return; }
+    const dt = c.getAttribute('data-deltask');
+    if (dt) {
+      if (confirm('Удалить эту задачу из чеклистов КМ?')) adminDelTask(dt);
       return;
     }
     const cp = c.getAttribute('data-copy');
