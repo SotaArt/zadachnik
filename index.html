@@ -1164,7 +1164,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 32,
+    version: 33,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4483,22 +4483,26 @@ newText.focus();
 </script>
 <script>
 /* ============================================================
-   РЕЖИМ КМ + ОБЛАКО SUPABASE (v31)
-   Кабинет КМ со своим листом, таймером дня, чеклистом, задачами
-   и антифродом; админ видит все листы, управляет КМ и ссылками.
+   РЕЖИМ КМ + ОБЛАКО GITHUB GIST (v33)
+   Кабинет КМ (таймер дня, чеклист, задачи, антифрод) на приватном
+   gist: один файл на КМ. Админ видит все листы, управляет ссылками.
 ============================================================ */
 (function () {
   'use strict';
 
   const CFG_KEY = 'tasker_km_cfg';
+  const KM_DESC = 'Задачник КМ';
+  const META_FILE = '_meta.json';
   const IDLE_MS = 10 * 60 * 1000;
   const HEARTBEAT_MS = 30 * 1000;
   const ONLINE_MS = 90 * 1000;
 
   const KM = {
-    cfg: { url: '', key: '' },
+    cfg: { token: '', gistId: '', login: '' },
     mode: false,
-    row: null,
+    kmId: null,
+    name: null,
+    pinHash: null,
     doc: null,
     roster: [],
     adminRows: [],
@@ -4506,7 +4510,7 @@ newText.focus();
     hbId: null,
     idleId: null,
     lastActivity: Date.now(),
-    tStart: 0
+    pagehideBound: false
   };
   window.__KM = KM;
 
@@ -4552,15 +4556,14 @@ newText.focus();
   }
   async function pinHash(kmId, pin) { return sha256hex('km:' + kmId + ':' + pin); }
 
+  /* ============ config / hash ============ */
   function cfgLoad() {
+    try { const s = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (s) KM.cfg = Object.assign(KM.cfg, s); } catch (e) {}
     const p = parseHash();
-    if (p.u && p.k) { KM.cfg = { url: p.u, key: p.k }; cfgSave(); }
-    else {
-      try { const s = JSON.parse(localStorage.getItem(CFG_KEY) || 'null'); if (s) KM.cfg = s; } catch (e) {}
-    }
+    if (p.g && p.t) { KM.cfg.gistId = p.g; KM.cfg.token = p.t; cfgSave(); }
   }
   function cfgSave() { try { localStorage.setItem(CFG_KEY, JSON.stringify(KM.cfg)); } catch (e) {} }
-  function cfgReady() { return !!(KM.cfg.url && KM.cfg.key); }
+  function cfgReady() { return !!(KM.cfg.token && KM.cfg.gistId); }
 
   function parseHash() {
     const h = location.hash || '';
@@ -4571,52 +4574,96 @@ newText.focus();
       if (!kv) return;
       const i = kv.indexOf('='); if (i < 0) return;
       const k = kv.slice(0, i), v = kv.slice(i + 1);
-      if (k === 'u') out.u = decodeURIComponent(v);
-      if (k === 'k') out.k = decodeURIComponent(v);
+      if (k === 'g') out.g = decodeURIComponent(v);
+      if (k === 't') out.t = decodeURIComponent(v);
       if (k === 'id') out.id = decodeURIComponent(v);
     });
     return out;
   }
   function kmIsMode() { return /^#km/.test(location.hash || ''); }
 
-  async function api(path, opts) {
-    if (!cfgReady()) throw new Error('Не настроено подключение к облаку');
-    const base = KM.cfg.url.replace(/\/+$/, '');
-    const res = await fetch(base + '/rest/v1/' + path, Object.assign({
-      headers: {
-        apikey: KM.cfg.key,
-        Authorization: 'Bearer ' + KM.cfg.key,
-        'Content-Type': 'application/json'
-      }
-    }, opts || {}));
-    const txt = await res.text();
-    if (!res.ok) throw new Error('Supabase ' + res.status + ': ' + txt.slice(0, 180));
-    return txt ? JSON.parse(txt) : null;
+  /* ============ GitHub Gist layer ============ */
+  function ghH() { return { Authorization: 'Bearer ' + KM.cfg.token, Accept: 'application/vnd.github+json' }; }
+  async function gistGet() {
+    const res = await fetch('https://api.github.com/gists/' + KM.cfg.gistId, { headers: ghH() });
+    if (!res.ok) throw new Error('Gist ' + res.status);
+    return res.json();
+  }
+  async function gistPatch(files) {
+    const res = await fetch('https://api.github.com/gists/' + KM.cfg.gistId, {
+      method: 'PATCH',
+      headers: Object.assign(ghH(), { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ files: files })
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error('Gist ' + res.status + ': ' + t.slice(0, 140));
+    }
+    return res.json();
+  }
+  function kmFileName(id) { return 'km_' + id + '.json'; }
+  function parseFiles(g) {
+    const out = [];
+    const files = g.files || {};
+    Object.keys(files).forEach(fn => {
+      if (!fn.startsWith('km_')) return;
+      const f = files[fn];
+      if (!f || !f.content) return;
+      try { const j = JSON.parse(f.content); if (j && j.id) out.push(j); } catch (e) {}
+    });
+    return out;
   }
   async function rosterList() {
-    return api('km_state?select=km_id,name,updated_at&order=name.asc');
+    const g = await gistGet();
+    return parseFiles(g).map(r => ({ km_id: r.id, name: r.name }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ru'));
   }
-  async function rowGet(kmId) {
-    const r = await api('km_state?select=*&km_id=eq.' + encodeURIComponent(kmId));
-    return r && r[0] ? r[0] : null;
+  async function kmGet(kmId) {
+    const g = await gistGet();
+    const f = (g.files || {})[kmFileName(kmId)];
+    if (!f || !f.content) return null;
+    try { return JSON.parse(f.content); } catch (e) { return null; }
   }
-  async function rowUpsert(row) {
-    return api('km_state?on_conflict=km_id', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(row)
+  async function kmPut(rec) {
+    await gistPatch({ [kmFileName(rec.id)]: { content: JSON.stringify(rec) } });
+  }
+  async function kmDelete(kmId) {
+    await gistPatch({ [kmFileName(kmId)]: null });
+  }
+  async function adminRowsAll() {
+    const g = await gistGet();
+    return parseFiles(g);
+  }
+  async function gistSetup(token) {
+    const res = await fetch('https://api.github.com/user', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
     });
-  }
-  async function rowDelete(kmId) {
-    return api('km_state?km_id=eq.' + encodeURIComponent(kmId), { method: 'DELETE' });
-  }
-  async function pushDoc() {
-    if (!KM.row) return;
-    KM.row.doc = KM.doc;
-    KM.row.updated_at = new Date().toISOString();
-    await rowUpsert({ km_id: KM.row.km_id, name: KM.row.name, pin_hash: KM.row.pin_hash, doc: KM.doc, deleted: false });
+    if (!res.ok) throw new Error('Токен не подошёл (' + res.status + ') — проверьте scope «gist»');
+    const user = await res.json();
+    let gistId = null;
+    const listRes = await fetch('https://api.github.com/gists?per_page=100', {
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
+    });
+    if (listRes.ok) {
+      const gists = await listRes.json();
+      const found = gists.find(g => (g.description || '') === KM_DESC);
+      if (found) gistId = found.id;
+    }
+    if (!gistId) {
+      const createRes = await fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: KM_DESC, public: false, files: { [META_FILE]: { content: JSON.stringify({ app: 'zadachnik-km', created: Date.now() }) } } })
+      });
+      if (!createRes.ok) throw new Error('Не удалось создать gist (' + createRes.status + ')');
+      gistId = (await createRes.json()).id;
+    }
+    KM.cfg = { token: token, gistId: gistId, login: user.login };
+    cfgSave();
+    return KM.cfg;
   }
 
+  /* ============ doc helpers ============ */
   function emptyDoc() {
     return { checklist: [], tasks: [], entries: [], events: [], timer: null, lastSeen: Date.now(), day: today() };
   }
@@ -4642,6 +4689,7 @@ newText.focus();
 
   let kmRoot = null, kmTimerId = null;
 
+  /* ============ KM shell ============ */
   function buildShell() {
     kmRoot = ce('div', 'km-root');
     kmRoot.id = 'kmApp';
@@ -4703,12 +4751,14 @@ newText.focus();
     if (!kmId) { err.textContent = 'Выберите себя из списка'; return; }
     if (!pin) { err.textContent = 'Введите ПИН-код'; return; }
     try {
-      const row = await rowGet(kmId);
-      if (!row) { err.textContent = 'КМ не найден'; return; }
+      const rec = await kmGet(kmId);
+      if (!rec) { err.textContent = 'КМ не найден'; return; }
       const h = await pinHash(kmId, pin);
-      if (row.pin_hash && row.pin_hash !== h) { err.textContent = 'Неверный ПИН-код'; return; }
-      KM.row = row;
-      KM.doc = normDoc(row.doc);
+      if (rec.pinHash && rec.pinHash !== h) { err.textContent = 'Неверный ПИН-код'; return; }
+      KM.kmId = kmId;
+      KM.name = rec.name;
+      KM.pinHash = rec.pinHash;
+      KM.doc = normDoc(rec.doc);
       KM.doc.day = today();
       kmStartHeartbeat();
       kmShowSheet();
@@ -4719,7 +4769,7 @@ newText.focus();
   function kmLogout() {
     if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('logout');
     kmStopHeartbeat();
-    KM.row = null; KM.doc = null;
+    KM.kmId = null; KM.name = null; KM.pinHash = null; KM.doc = null;
     kmShowLogin();
   }
 
@@ -4757,7 +4807,7 @@ newText.focus();
         '<div id="kmEvents" class="km-list"></div>' +
       '</div>';
 
-    el('kmName').textContent = KM.row.name;
+    el('kmName').textContent = KM.name;
     el('kmStartBtn').onclick = kmStartTimer;
     el('kmStopBtn').onclick = () => kmStopTimer('manual');
     el('kmChkAdd').onclick = addChecklist;
@@ -4886,10 +4936,13 @@ newText.focus();
       if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
       if (Date.now() - KM.lastActivity > IDLE_MS) kmStopTimer('idle');
     }, 30000);
-    window.addEventListener('pagehide', () => {
-      if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('offline');
-      kmPushNow();
-    });
+    if (!KM.pagehideBound) {
+      KM.pagehideBound = true;
+      window.addEventListener('pagehide', () => {
+        if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('offline');
+        kmPushNow();
+      });
+    }
     kmHeartbeat();
   }
   function kmStopHeartbeat() {
@@ -4897,11 +4950,11 @@ newText.focus();
     if (KM.idleId) { clearInterval(KM.idleId); KM.idleId = null; }
   }
   async function kmHeartbeat() {
-    if (!KM.row || !KM.doc) return;
+    if (!KM.kmId || !KM.doc) return;
     KM.doc.lastSeen = Date.now();
     const dot = el('kmOnlineDot'); if (dot) dot.style.color = '#22c55e';
     try {
-      await pushDoc();
+      await kmPushNow();
       const n = el('kmNet'); if (n) n.textContent = 'синхр. ' + new Date().toLocaleTimeString('ru-RU');
     } catch (e) {
       const dot2 = el('kmOnlineDot'); if (dot2) dot2.style.color = '#ef4444';
@@ -4910,27 +4963,31 @@ newText.focus();
   }
   let pushTimer = null;
   function kmPushSoon() {
-    if (!KM.row) return;
+    if (!KM.kmId) return;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(kmPushNow, 1500);
   }
   async function kmPushNow() {
-    if (!KM.row || !KM.doc) return;
+    if (!KM.kmId || !KM.doc) return;
     pushTimer = null;
-    try { KM.doc.lastSeen = Date.now(); await pushDoc(); } catch (e) {}
+    try {
+      KM.doc.lastSeen = Date.now();
+      await kmPut({ id: KM.kmId, name: KM.name, pinHash: KM.pinHash, doc: KM.doc });
+    } catch (e) {}
   }
 
+  /* ============ admin ============ */
   function buildAdminPanel() {
     const panel = el('panel-km');
     if (!panel) return;
     panel.innerHTML =
       '<div class="km-top">' +
         '<div class="km-conn" id="kmConn">☁ облако не подключено</div>' +
-        '<button id="kmCfgBtn" class="km-btn">⚙ Настройки Supabase</button>' +
+        '<button id="kmCfgBtn" class="km-btn">⚙ Настройки облака</button>' +
         '<button id="kmRefreshBtn" class="km-btn">⟳ Обновить</button>' +
       '</div>' +
       '<div class="km-card">' +
-        '<div class="km-card-head"><span>➕ Добавить КМ в облако</span></div>' +
+        '<div class="km-card-head"><span>➕ Добавить КМ</span></div>' +
         '<div class="km-row">' +
           '<input id="kmNewName" class="km-input" placeholder="Имя КМ">' +
           '<input id="kmNewPin" class="km-input km-due" inputmode="numeric" placeholder="ПИН (4–6 цифр)">' +
@@ -4945,20 +5002,27 @@ newText.focus();
   }
 
   function openCfgModal() {
+    let pre = KM.cfg.token;
+    try { if (!pre && typeof syncState !== 'undefined' && syncState && syncState.token) pre = syncState.token; } catch (e) {}
     const w = ce('div', 'km-modal-bg');
     w.innerHTML =
-      '<div class="km-modal">' +
-        '<h3>Настройки Supabase</h3>' +
-        '<p class="km-muted">Project URL и anon public key (Settings → API). Хранятся только в этом браузере.</p>' +
-        '<label>Project URL</label><input id="cfgUrl" class="km-input" placeholder="https://xxxx.supabase.co" value="' + esc(KM.cfg.url) + '">' +
-        '<label>anon public key</label><input id="cfgKey" class="km-input" placeholder="eyJhbGciOi..." value="' + esc(KM.cfg.key) + '">' +
-        '<div class="km-modal-btns"><button class="km-btn" id="cfgCancel">Отмена</button><button class="km-btn km-primary sm" id="cfgSave">Сохранить</button></div>' +
+      '<div class="km-modal km-modal-wide">' +
+        '<h3>Настройки облака (GitHub Gist)</h3>' +
+        '<p class="km-muted">Нужен GitHub-токен со scope «gist». При подключении будет создан (или найден) приватный gist «Задачник КМ». Токен хранится только в этом браузере.</p>' +
+        '<label>GitHub-токен</label><input id="cfgToken" class="km-input" type="password" placeholder="ghp_…" value="' + esc(pre) + '">' +
+        '<div class="km-muted" style="margin-top:6px">Создать токен: <a href="https://github.com/settings/tokens/new?scopes=gist&description=zadachnik-km" target="_blank" rel="noopener" style="color:#818cf8">github.com/settings/tokens</a></div>' +
+        '<div class="km-err" id="cfgErr"></div>' +
+        '<div class="km-modal-btns"><button class="km-btn" id="cfgCancel">Отмена</button><button class="km-btn km-primary sm" id="cfgSave">Подключить</button></div>' +
       '</div>';
     document.body.appendChild(w);
     w.querySelector('#cfgCancel').onclick = () => w.remove();
-    w.querySelector('#cfgSave').onclick = () => {
-      KM.cfg = { url: w.querySelector('#cfgUrl').value.trim(), key: w.querySelector('#cfgKey').value.trim() };
-      cfgSave(); w.remove(); kmRenderAdmin(true);
+    w.querySelector('#cfgSave').onclick = async () => {
+      const token = w.querySelector('#cfgToken').value.trim();
+      const err = w.querySelector('#cfgErr');
+      if (!token) { err.textContent = 'Вставьте токен'; return; }
+      err.textContent = 'Подключение…';
+      try { await gistSetup(token); w.remove(); kmRenderAdmin(true); }
+      catch (e) { err.textContent = e.message; }
     };
   }
 
@@ -4968,10 +5032,11 @@ newText.focus();
     const msg = el('kmAddMsg');
     if (!name || !pin) { msg.textContent = 'Укажите имя и ПИН'; return; }
     if (!/^\d{4,6}$/.test(pin)) { msg.textContent = 'ПИН — 4–6 цифр'; return; }
-    const kmId = 'km_' + uid();
+    if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
+    const kmId = uid();
     try {
       const h = await pinHash(kmId, pin);
-      await rowUpsert({ km_id: kmId, name: name, pin_hash: h, doc: emptyDoc(), deleted: false });
+      await kmPut({ id: kmId, name: name, pinHash: h, doc: emptyDoc() });
       el('kmNewName').value = ''; el('kmNewPin').value = '';
       msg.textContent = 'Добавлен: ' + name;
       kmRenderAdmin(true);
@@ -4981,10 +5046,10 @@ newText.focus();
   async function kmRenderAdmin() {
     const conn = el('kmConn');
     if (!conn) return;
-    if (!cfgReady()) { conn.textContent = '☁ облако не подключено — нажмите «Настройки Supabase»'; el('kmAdminList').innerHTML = ''; return; }
-    conn.textContent = '☁ подключено: ' + KM.cfg.url.replace(/^https?:\/\//, '').split('.')[0];
+    if (!cfgReady()) { conn.textContent = '☁ облако не подключено — нажмите «⚙ Настройки облака»'; el('kmAdminList').innerHTML = ''; return; }
+    conn.textContent = '☁ подключено: ' + (KM.cfg.login ? KM.cfg.login + ' · ' : '') + 'gist ' + KM.cfg.gistId.slice(0, 8);
     let rows;
-    try { rows = await api('km_state?select=*&order=name.asc'); }
+    try { rows = await adminRowsAll(); }
     catch (e) { conn.textContent = '⚠ ' + e.message; return; }
     KM.adminRows = rows || [];
     const now = Date.now();
@@ -4997,7 +5062,7 @@ newText.focus();
       const chkDone = doc.checklist.filter(x => x.done).length;
       const openTasks = doc.tasks.filter(x => !x.done).length;
       const lastEv = doc.events[0];
-      const link = kmLink(r.km_id);
+      const link = kmLink(r.id);
       return '<div class="km-acard">' +
         '<div class="km-acard-head">' +
           '<span style="color:' + (online ? '#22c55e' : '#71717a') + '">●</span>' +
@@ -5013,8 +5078,8 @@ newText.focus();
         (lastEv ? '<div class="km-acard-ev km-muted">посл. событие: ' + esc(lastEv.type) + '</div>' : '') +
         '<div class="km-acard-actions">' +
           '<button class="km-btn" data-copy="' + esc(link) + '">🔗 Ссылка для КМ</button>' +
-          '<button class="km-btn" data-show="' + esc(r.km_id) + '">👁 Лист</button>' +
-          '<button class="km-btn km-danger" data-delkm="' + esc(r.km_id) + '" data-name="' + esc(r.name) + '">🗑</button>' +
+          '<button class="km-btn" data-show="' + esc(r.id) + '">👁 Лист</button>' +
+          '<button class="km-btn km-danger" data-delkm="' + esc(r.id) + '" data-name="' + esc(r.name) + '">🗑</button>' +
         '</div>' +
       '</div>';
     }).join('') || '<div class="km-muted">Пока нет ни одного КМ</div>';
@@ -5022,7 +5087,7 @@ newText.focus();
 
   function kmLink(kmId) {
     const base = location.origin + location.pathname;
-    return base + '#km?u=' + encodeURIComponent(KM.cfg.url) + '&k=' + encodeURIComponent(KM.cfg.key) + '&id=' + encodeURIComponent(kmId);
+    return base + '#km?g=' + encodeURIComponent(KM.cfg.gistId) + '&t=' + encodeURIComponent(KM.cfg.token) + '&id=' + encodeURIComponent(kmId);
   }
 
   document.addEventListener('click', e => {
@@ -5038,13 +5103,13 @@ newText.focus();
     const dk = c.getAttribute('data-delkm');
     if (dk) {
       if (confirm('Удалить КМ «' + c.getAttribute('data-name') + '» из облака?')) {
-        rowDelete(dk).then(() => kmRenderAdmin()).catch(err => alert(err.message));
+        kmDelete(dk).then(() => kmRenderAdmin()).catch(err => alert(err.message));
       }
       return;
     }
     const sh = c.getAttribute('data-show');
     if (sh) {
-      const r = (KM.adminRows || []).find(x => x.km_id === sh);
+      const r = (KM.adminRows || []).find(x => x.id === sh);
       if (r) kmAdminViewDoc(r);
     }
   });
@@ -5120,6 +5185,7 @@ newText.focus();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
+
 </script>
 </body>
 </html>
