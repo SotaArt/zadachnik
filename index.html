@@ -4,20 +4,71 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Задачник — офлайн-приложение для личных задач, хронометража рабочего времени и контроля менеджеров (КМ)">
-<meta name="theme-color" content="#1e1e2e">
+<meta name="theme-color" content="#12121c">
 <meta name="color-scheme" content="dark">
 <title>Задачник</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
-    background: #1e1e2e; color: #e4e4e7;
-    min-height: 100vh; padding: 20px;
+  /* ============================================================
+     ДИЗАЙН-СИСТЕМА (единые токены) — v38
+     Слоёные тёмные поверхности, мягкие тени, радиусы, акцент.
+     ============================================================ */
+  :root {
+    --bg: #12121c;
+    --bg-elev: #1a1a28;
+    --surface: #1e1e2e;
+    --surface-2: #24243a;
+    --surface-3: #2c2c46;
+    --surface-hi: #333355;
+    --border: #323250;
+    --border-soft: #28283f;
+    --text: #e8e8f2;
+    --text-dim: #a2a2bd;
+    --text-faint: #73738f;
+    --accent: #7c83ff;
+    --accent-hover: #6a71f0;
+    --accent-soft: rgba(124,131,255,.14);
+    --purple: #a78bfa;
+    --green: #4ade80;
+    --green-dim: #22c55e;
+    --amber: #fbbf24;
+    --red: #fb7185;
+    --red-solid: #ef4444;
+    --cyan: #22d3ee;
+    --r-xs: 8px; --r-sm: 10px; --r-md: 12px; --r-lg: 16px; --r-xl: 20px;
+    --sh-sm: 0 1px 2px rgba(0,0,0,.35);
+    --sh-md: 0 6px 20px rgba(0,0,0,.4);
+    --sh-lg: 0 20px 50px rgba(0,0,0,.55);
+    --sp-1: 6px; --sp-2: 10px; --sp-3: 14px; --sp-4: 18px; --sp-5: 24px;
+    --dash: 1px solid var(--border-soft);
+    --ring: 0 0 0 3px var(--accent-soft);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
   }
-  .container { max-width: 900px; margin: 0 auto; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--font);
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(124,131,255,.10), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(167,139,250,.08), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--text);
+    line-height: 1.45;
+    min-height: 100vh; min-height: 100dvh; padding: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  ::selection { background: var(--accent-soft); }
+  :focus-visible { outline: none; box-shadow: var(--ring); border-radius: var(--r-xs); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface-hi); border-radius: 8px;
+    border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: #3d3d63; background-clip: padding-box; }
 
   .header { text-align: center; margin-bottom: 16px; }
   .header h1 { font-size: 26px; font-weight: 600; margin-bottom: 14px; color: #e4e4e7; }
@@ -780,6 +831,208 @@
   .km-task-subitem { font-size: 12px; color: #a1a1aa; padding: 2px 0 2px 20px; }
   .km-task-subitem.done { color: #4ade80; }
   .km-task-doneby { color: #818cf8; font-size: 11px; }
+
+  /* ============================================================
+     СЛОЙ УНИФИКАЦИИ v38 — приводит все блоки к общему стилю
+     ============================================================ */
+
+  /* --- Шапка --- */
+  .header h1 { font-size: 30px; letter-spacing: -.4px;
+    background: linear-gradient(90deg, var(--text), var(--purple));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .header-actions button { background: var(--surface-2); border: var(--dash);
+    border-radius: var(--r-sm); transition: transform .12s, background .15s; }
+  .header-actions button:hover { background: var(--surface-hi); transform: translateY(-1px); }
+  .header-actions button.accent { background: var(--accent); }
+  .header-actions button.accent:hover { background: var(--accent-hover); }
+  .header-actions button.warn { background: var(--red-solid); }
+  .header-actions button.warn:hover { background: #dc2626; }
+
+  /* --- Табы --- */
+  .tabs { background: var(--surface-2); border: var(--dash); border-radius: var(--r-md);
+    padding: 5px; gap: 5px; box-shadow: var(--sh-sm); }
+  .tabs button { border-radius: var(--r-xs); }
+  .tabs button:hover { color: var(--text); background: var(--surface-3); }
+  .tabs button.active { background: var(--accent); color: #fff; box-shadow: var(--sh-sm); }
+
+  /* --- Панели / карточки / боксы --- */
+  .add-box, .stats, .time-day, .team-top, .team-acc, .sessions-history,
+  .pulse-box, .calls-panel, .session-acc-actions {
+    background: var(--surface-2); border: var(--dash); border-radius: var(--r-md);
+  }
+  .add-box { padding: var(--sp-4); box-shadow: var(--sh-sm); }
+  .stat-card, .time-summary, .abs-row, .time-entry, .session-accordion,
+  .time-day-header, .field-group {
+    background: var(--surface-3); border-radius: var(--r-sm);
+  }
+  .time-summary { border: var(--dash); }
+  .team-acc, .time-day { border-left: 3px solid var(--accent); }
+  .team-top { border-left: 3px solid var(--purple); }
+  .pulse-box { border-left: 3px solid var(--accent); }
+  .task { background: var(--surface-2); border: var(--dash); border-left: 3px solid transparent;
+    border-radius: var(--r-md); transition: transform .12s, border-color .15s, background .15s; }
+  .task:hover { background: var(--surface-3); }
+  .session-accordion { border-left: 3px solid var(--green-dim); }
+
+  /* --- Поля ввода (единый вид) --- */
+  input[type="text"], input[type="time"], input[type="date"],
+  input[type="datetime-local"], input[type="number"], input[type="password"],
+  input[type="search"], select, textarea, .km-input, .search-box input,
+  .emp-picker select, .pulse-row input, .session-notes-block textarea,
+  .os-picker-box textarea, .call-live-row .live-input {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--r-sm);
+    font-family: inherit; color-scheme: dark; transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus, .km-input:focus,
+  .search-box input:focus, .emp-picker select:focus, .pulse-row input:focus {
+    outline: none; border-color: var(--accent); box-shadow: var(--ring);
+  }
+  .search-box input { background: var(--surface-2); border-radius: var(--r-md); }
+  .field-group { border: var(--dash); padding: 9px 10px; }
+  .field-group label { color: var(--text-dim); }
+
+  /* --- Кнопки (единый вид) --- */
+  .km-btn, .abs-actions button, .session-acc-actions button, .quick-btns button,
+  .os-picker-cancel, .km-logout {
+    background: var(--surface-3); color: var(--text); border: var(--dash);
+    border-radius: var(--r-sm); transition: background .15s, transform .12s;
+  }
+  .km-btn:hover, .abs-actions button:hover, .session-acc-actions button:hover,
+  .quick-btns button:hover, .os-picker-cancel:hover, .km-logout:hover {
+    background: var(--surface-hi);
+  }
+  button.primary, .km-primary, .os-picker-ok {
+    background: var(--accent); color: #fff; border: none; border-radius: var(--r-sm);
+    font-weight: 600; transition: background .15s, transform .12s, box-shadow .15s;
+  }
+  button.primary:hover, .km-primary:hover, .os-picker-ok:hover {
+    background: var(--accent-hover); box-shadow: 0 6px 18px rgba(124,131,255,.35);
+  }
+  button.primary:active, .km-primary:active, .km-btn:active { transform: translateY(1px); }
+  .km-danger, button.danger, .km-btn.km-danger { background: rgba(239,68,68,.16);
+    color: #fca5a5; border-color: rgba(239,68,68,.35); }
+  .km-danger:hover, button.danger:hover, .km-btn.km-danger:hover {
+    background: rgba(239,68,68,.28); color: #fecaca;
+  }
+  .km-plus { background: var(--surface-3); border: var(--dash); border-radius: var(--r-sm); }
+  .km-plus:hover { background: var(--surface-hi); }
+
+  /* --- Фильтры / быстрые кнопки --- */
+  .filters button, .stats-toggle { background: var(--surface-2); border: var(--dash);
+    border-radius: var(--r-sm); }
+  .filters button:hover { background: var(--surface-3); color: var(--text); }
+  .filters button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* --- Чекбокс-круг --- */
+  .checkbox { border-color: var(--accent); }
+  .checkbox.checked { background: var(--accent); }
+
+  /* --- Аккордеон «Сотрудники» --- */
+  .time-day-header { border-bottom: var(--dash); }
+  .team-acc-header:hover { background: var(--surface-3); }
+
+  /* --- Таймер --- */
+  .timer-box { border: var(--dash); border-radius: var(--r-md); box-shadow: var(--sh-md); }
+  .timer-display { color: var(--purple); }
+
+  /* --- Модальные окна: единый вид и БЕЗ выхода за экран --- */
+  .km-modal-bg, .os-picker-modal {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    padding: max(20px, env(safe-area-inset-top)) 20px;
+    overflow-y: auto;
+  }
+  .km-modal, .os-picker-box {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-lg);
+    box-shadow: var(--sh-lg); color: var(--text);
+    max-height: min(86vh, 86dvh); overflow-y: auto;
+    margin: auto;
+  }
+  .km-modal { padding: var(--sp-5); }
+  .km-modal h3, .os-picker-box h3 { font-size: 18px; letter-spacing: -.2px; }
+  .km-modal label { color: var(--text-dim); }
+  .km-modal-btns { flex-wrap: wrap; }
+  .km-modal-btns .km-btn { flex: 0 1 auto; }
+
+  /* --- Модуль КМ: поверхности и карточки --- */
+  .km-root { background:
+      radial-gradient(1000px 500px at 50% -10%, rgba(124,131,255,.10), transparent 60%),
+      var(--bg); }
+  .km-topbar { background: rgba(18,18,28,.85); backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px); border-bottom: var(--dash); }
+  .km-card { background: var(--surface-2); border: var(--dash); border-radius: var(--r-md);
+    box-shadow: var(--sh-sm); transition: box-shadow .15s; }
+  .km-card:hover { box-shadow: var(--sh-md); }
+  .km-events-card { background: var(--bg-elev); }
+  .km-acard { background: var(--surface-2); border: var(--dash); border-radius: var(--r-md);
+    box-shadow: var(--sh-sm); transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .km-acard:hover { transform: translateY(-2px); border-color: var(--border); box-shadow: var(--sh-md); }
+  .km-item, .km-rem-item, .km-task-item { border-bottom: var(--dash); }
+  .km-timer-clock { letter-spacing: 1px; }
+  .km-card-head { color: var(--text); }
+  .km-caret { color: var(--text-faint); }
+  .km-badge.off { background: var(--surface-3); color: var(--text-dim); }
+  .km-conn { color: var(--text-dim); }
+  .km-hint { background: var(--bg-elev); border: 1px dashed var(--border); border-radius: var(--r-sm); }
+  .km-task-form { background: var(--bg-elev); border: var(--dash); border-radius: var(--r-sm); }
+  .km-task-editing { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  .mselect-toggle { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .mselect-panel { background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--r-sm); box-shadow: var(--sh-lg); }
+  .mselect-panel label:hover { background: var(--accent-soft); }
+  .mselect.open .mselect-toggle { border-color: var(--accent); box-shadow: var(--ring); }
+  .km-pin { background: var(--surface); border: 1px solid var(--border); color: var(--purple); }
+  .km-targets-list label { background: var(--surface); border: 1px solid var(--border); }
+  .km-targets-list label:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+  .km-events-card.km-card.collapsed, .km-card.collapsed { box-shadow: var(--sh-sm); }
+  .km-task-due { color: var(--amber); }
+  .km-task-rep, .km-task-doneby { color: var(--purple); }
+  .km-rem-time { color: var(--amber); }
+  .km-icon { border-radius: 6px; }
+  .km-icon:hover { background: var(--surface-3); }
+  .km-del:hover { background: rgba(251,113,133,.12); border-radius: 6px; }
+  .km-view-sec { border-bottom: var(--dash); }
+
+  /* --- Панель админа/КМ кнопки --- */
+  .km-dist-btn, .actions button.dist-btn { background: var(--accent-soft); color: #c7cbff; }
+  .km-dist-btn:hover, .actions button.dist-btn:hover { background: rgba(124,131,255,.24); }
+  .km-call-check.on { color: var(--green); }
+  .km-call-check.off { color: var(--red); }
+  .km-call-item .cl-mark-end { color: var(--green); }
+  .km-call-item .cl-dur { color: var(--green); }
+
+  /* --- Будильники / баннеры --- */
+  .alarm-banner { background: linear-gradient(135deg, var(--red-solid), #dc2626);
+    border-radius: var(--r-md); box-shadow: var(--sh-lg); }
+  .backup-banner { border-radius: var(--r-md); box-shadow: var(--sh-md); }
+  .autosave-status { background: rgba(36,36,58,.9); backdrop-filter: blur(8px);
+    border: 1px solid var(--border-soft); }
+  .km-alarm { background: var(--surface-2); border: 1px solid var(--amber);
+    border-radius: var(--r-lg); box-shadow: var(--sh-lg); }
+
+  /* --- Адаптив: ничего не выходит за экран --- */
+  @media (max-width: 640px) {
+    body { padding: 14px; }
+    .header h1 { font-size: 24px; }
+    .tabs { overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tabs button { flex: 0 0 auto; padding: 9px 12px; white-space: nowrap; }
+    .km-body { padding: 14px; }
+    .km-timer-clock { font-size: 36px; }
+    .km-modal, .os-picker-box { max-height: 90vh; max-height: 90dvh; padding: 18px; }
+    .km-admin-list { grid-template-columns: 1fr; }
+    .km-modal-btns { flex-direction: column-reverse; }
+    .km-modal-btns .km-btn { width: 100%; }
+    .timer-display { font-size: 28px; }
+    .row { flex-direction: column; }
+    .field-group { min-width: 0; }
+  }
+
+  /* --- Уважение к настройкам анимации --- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
 </style>
 </head>
 <body>
@@ -1263,7 +1516,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 37,
+    version: 38,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
