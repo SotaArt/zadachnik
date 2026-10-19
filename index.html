@@ -682,6 +682,33 @@
   .km-modal label { display: block; margin: 10px 0 5px; font-size: 13px; color: #a1a1aa; }
   .km-modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
   .km-view-sec { margin: 12px 0; padding-bottom: 8px; border-bottom: 1px solid #3f3f56; }
+  .km-stats { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: center; margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid #2e2e42; font-size: 13px; color: #d4d4d8; }
+  .km-stats b { color: #4ade80; font-variant-numeric: tabular-nums; }
+  .km-stats .neg b { color: #fbbf24; }
+  .km-pin { font-family: ui-monospace, monospace; background: #1e1e2e; border: 1px solid #3f3f56;
+    border-radius: 6px; padding: 1px 7px; font-size: 12px; color: #a5b4fc; margin-left: 6px; }
+  .km-pin-lbl { color: #71717a; font-size: 11px; margin-left: 4px; }
+  .km-targets { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+  .km-targets-bar { font-size: 13px; color: #a1a1aa; }
+  .km-targets-list { display: flex; flex-wrap: wrap; gap: 7px; }
+  .km-targets-list label { font-size: 13px; background: #1e1e2e; border: 1px solid #3f3f56;
+    border-radius: 8px; padding: 5px 9px; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #e4e4e7; }
+  .km-targets-list label:has(input:checked) { background: #2b2b52; border-color: #6366f1; }
+  .km-rem-item { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #2a2a3c; font-size: 14px; }
+  .km-rem-time { font-family: ui-monospace, monospace; color: #fbbf24; min-width: 44px; }
+  .km-rem-text { flex: 1; }
+  .km-rem-who { color: #71717a; font-size: 11px; }
+  .km-hint { background: #1f1f2e; border: 1px dashed #3f3f56; border-radius: 8px; padding: 9px 12px;
+    font-size: 13px; color: #a1a1aa; margin-bottom: 14px; }
+  .km-alarm { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 4000;
+    background: #2b2137; border: 1px solid #f59e0b; border-radius: 12px; padding: 16px 22px; max-width: 90vw;
+    box-shadow: 0 10px 40px rgba(0,0,0,.6); text-align: center; }
+  .km-alarm h4 { margin: 0 0 8px; font-size: 16px; }
+  .km-alarm p { margin: 0 0 12px; color: #d4d4d8; font-size: 15px; }
+  .km-alarm button { background: #6366f1; color: #fff; border: none; border-radius: 8px; padding: 8px 20px; cursor: pointer; }
+  .km-alarm-dot { position: absolute; top: -8px; right: -8px; background: #ef4444; color: #fff; border-radius: 999px;
+    font-size: 11px; padding: 1px 6px; }
 </style>
 </head>
 <body>
@@ -1164,7 +1191,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 33,
+    version: 34,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4483,9 +4510,9 @@ newText.focus();
 </script>
 <script>
 /* ============================================================
-   РЕЖИМ КМ + ОБЛАКО GITHUB GIST (v33)
-   Кабинет КМ (таймер дня, чеклист, задачи, антифрод) на приватном
-   gist: один файл на КМ. Админ видит все листы, управляет ссылками.
+   РЕЖИМ КМ + ОБЛАКО GITHUB GIST (v34)
+   Кабинет КМ (таймер, чеклист, напоминания, антифрод) на приватном
+   gist; единый список КМ, ПИН, назначение задач и будильникам.
 ============================================================ */
 (function () {
   'use strict';
@@ -4493,24 +4520,33 @@ newText.focus();
   const CFG_KEY = 'tasker_km_cfg';
   const KM_DESC = 'Задачник КМ';
   const META_FILE = '_meta.json';
+  const REM_FILE = '_reminders.json';
   const IDLE_MS = 10 * 60 * 1000;
   const HEARTBEAT_MS = 30 * 1000;
   const ONLINE_MS = 90 * 1000;
+  const ALARM_GRACE_MS = 15 * 60 * 1000;
+
+  const NORM_H = (typeof WORK_DAY_HOURS !== 'undefined') ? WORK_DAY_HOURS : 8;
+  const WIN_START = (typeof WORK_WINDOW_START !== 'undefined') ? WORK_WINDOW_START : 9;
+  const WIN_END = (typeof WORK_WINDOW_END !== 'undefined') ? WORK_WINDOW_END : 18;
 
   const KM = {
     cfg: { token: '', gistId: '', login: '' },
     mode: false,
     kmId: null,
     name: null,
+    pin: null,
     pinHash: null,
     doc: null,
     roster: [],
     adminRows: [],
+    reminders: [],
     pollId: null,
     hbId: null,
     idleId: null,
     lastActivity: Date.now(),
-    pagehideBound: false
+    pagehideBound: false,
+    _remoteChecklist: null
   };
   window.__KM = KM;
 
@@ -4634,6 +4670,15 @@ newText.focus();
     const g = await gistGet();
     return parseFiles(g);
   }
+  async function remindersGet() {
+    const g = await gistGet();
+    const f = (g.files || {})[REM_FILE];
+    if (!f || !f.content) return [];
+    try { const a = JSON.parse(f.content); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  async function remindersPut(list) {
+    await gistPatch({ [REM_FILE]: { content: JSON.stringify(list, null, 2) } });
+  }
   async function gistSetup(token) {
     const res = await fetch('https://api.github.com/user', {
       headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' }
@@ -4663,18 +4708,64 @@ newText.focus();
     return KM.cfg;
   }
 
+  /* ============ единый список КМ → employees ============ */
+  function topEmpButtons(hide) {
+    const a = document.getElementById('addEmpBtn');
+    const d = document.getElementById('delEmpBtn');
+    if (a) a.style.display = hide ? 'none' : '';
+    if (d) d.style.display = hide ? 'none' : '';
+    if (hide && !el('kmTeamHint')) {
+      const team = el('panel-team');
+      if (team) {
+        const h = ce('div', 'km-hint');
+        h.id = 'kmTeamHint';
+        h.innerHTML = '🛰 Список КМ — общий и ведётся во вкладке «КМ-листы»: там добавление и удаление. Здесь — только сессии, отсутствия и отчёты.';
+        team.insertBefore(h, team.firstChild);
+      }
+    }
+    if (!hide && el('kmTeamHint')) el('kmTeamHint').remove();
+  }
+
+  async function syncRosterToEmployees() {
+    if (!cfgReady()) return false;
+    let roster;
+    try { roster = await rosterList(); } catch (e) { return false; }
+    if (!Array.isArray(roster) || !roster.length) { return false; }
+    const byName = {};
+    employees.forEach(e => { byName[String(e.name).trim().toLowerCase()] = e; });
+    const keep = {};
+    roster.forEach(r => {
+      const nm = String(r.name).trim().toLowerCase();
+      let e = null;
+      for (let i = 0; i < employees.length; i++) if (employees[i].cloudId === r.km_id) { e = employees[i]; break; }
+      if (!e) e = byName[nm] || null;
+      if (e) { e.cloudId = r.km_id; e.name = r.name; keep[e.id] = true; }
+      else {
+        const id = Date.now() + Math.random();
+        employees.push({ id: id, name: r.name, cloudId: r.km_id, created: Date.now() });
+        keep[id] = true;
+      }
+    });
+    employees = employees.filter(e => keep[e.id] === true);
+    if (activeEmpCard !== null && !employees.some(e => e.id === activeEmpCard)) activeEmpCard = null;
+    if (activeEmpFilter !== null && !employees.some(e => e.id === activeEmpFilter)) activeEmpFilter = null;
+    save();
+    renderTeam();
+    return true;
+  }
+
   /* ============ doc helpers ============ */
   function emptyDoc() {
-    return { checklist: [], tasks: [], entries: [], events: [], timer: null, lastSeen: Date.now(), day: today() };
+    return { checklist: [], entries: [], events: [], fired: [], timer: null, lastSeen: Date.now(), day: today() };
   }
   function normDoc(d) {
     const e = emptyDoc();
     if (!d || typeof d !== 'object') return e;
     return {
       checklist: Array.isArray(d.checklist) ? d.checklist : [],
-      tasks: Array.isArray(d.tasks) ? d.tasks : [],
       entries: Array.isArray(d.entries) ? d.entries : [],
       events: Array.isArray(d.events) ? d.events : [],
+      fired: Array.isArray(d.fired) ? d.fired : [],
       timer: d.timer || null, lastSeen: d.lastSeen || Date.now(), day: d.day || today()
     };
   }
@@ -4682,12 +4773,27 @@ newText.focus();
     const base = today();
     return KM.doc.entries.filter(x => x.date === base).reduce((s, x) => s + Math.max(0, x.endTs - x.startTs), 0);
   }
+  function workedMs() {
+    let ms = todayMs();
+    if (KM.doc.timer && KM.doc.timer.running) ms += Math.max(0, Date.now() - KM.doc.timer.startTs);
+    return ms;
+  }
   function logEvent(type, note) {
     KM.doc.events.unshift({ id: uid(), ts: Date.now(), type: type, note: note || '' });
     KM.doc.events = KM.doc.events.slice(0, 200);
   }
+  function kmMergeChecklist() {
+    const remote = KM._remoteChecklist;
+    if (!remote) return;
+    const own = KM.doc.checklist.filter(x => x.by !== 'admin');
+    const admins = remote.filter(x => x.by === 'admin').map(a => {
+      const l = KM.doc.checklist.find(x => x.id === a.id);
+      return l ? Object.assign({}, a, { done: l.done, doneTs: l.doneTs }) : a;
+    });
+    KM.doc.checklist = admins.concat(own);
+  }
 
-  let kmRoot = null, kmTimerId = null;
+  let kmRoot = null, kmTimerId = null, audioCtx = null;
 
   /* ============ KM shell ============ */
   function buildShell() {
@@ -4754,13 +4860,17 @@ newText.focus();
       const rec = await kmGet(kmId);
       if (!rec) { err.textContent = 'КМ не найден'; return; }
       const h = await pinHash(kmId, pin);
-      if (rec.pinHash && rec.pinHash !== h) { err.textContent = 'Неверный ПИН-код'; return; }
+      if (rec.pinHash) { if (rec.pinHash !== h) { err.textContent = 'Неверный ПИН-код'; return; } }
+      else if (rec.pin !== pin) { err.textContent = 'Неверный ПИН-код'; return; }
       KM.kmId = kmId;
       KM.name = rec.name;
-      KM.pinHash = rec.pinHash;
+      KM.pin = rec.pin || pin;
+      KM.pinHash = rec.pinHash || h;
       KM.doc = normDoc(rec.doc);
       KM.doc.day = today();
+      requestNotifPermission();
       kmStartHeartbeat();
+      kmFetchReminders();
       kmShowSheet();
       kmPushSoon();
     } catch (e) { err.textContent = e.message; }
@@ -4769,7 +4879,7 @@ newText.focus();
   function kmLogout() {
     if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('logout');
     kmStopHeartbeat();
-    KM.kmId = null; KM.name = null; KM.pinHash = null; KM.doc = null;
+    KM.kmId = null; KM.name = null; KM.pin = null; KM.pinHash = null; KM.doc = null;
     kmShowLogin();
   }
 
@@ -4781,26 +4891,25 @@ newText.focus();
       '<div class="km-card km-timer">' +
         '<div class="km-timer-clock" id="kmClock">00:00:00</div>' +
         '<div class="km-timer-sub" id="kmTimerSub">— таймер остановлен —</div>' +
-        '<input id="kmTopic" class="km-input" placeholder="Над чем работаю сейчас?" autocomplete="off">' +
+        '<input id="kmTopic" class="km-input" placeholder="Какую задачу делаю?" autocomplete="off">' +
         '<div class="km-timer-btns">' +
-          '<button class="km-primary" id="kmStartBtn">▶ Старт дня</button>' +
+          '<button class="km-primary" id="kmStartBtn">▶ Старт задачи</button>' +
           '<button class="km-stop" id="kmStopBtn" style="display:none">■ Стоп</button>' +
         '</div>' +
-        '<div class="km-day-total" id="kmDayTotal"></div>' +
+        '<div class="km-stats" id="kmStats"></div>' +
       '</div>' +
       '<div class="km-card">' +
         '<div class="km-card-head"><span>✅ Чеклист дня</span></div>' +
-        '<div class="km-row"><input id="kmChkText" class="km-input" placeholder="Пункт плана…"><button class="km-btn" id="kmChkAdd">+</button></div>' +
+        '<div class="km-row"><input id="kmChkText" class="km-input" placeholder="Добавить свою задачу…"><button class="km-btn" id="kmChkAdd">+</button></div>' +
         '<div id="kmChkList" class="km-list"></div>' +
-      '</div>' +
-      '<div class="km-card">' +
-        '<div class="km-card-head"><span>📋 Мои задачи</span></div>' +
-        '<div class="km-row"><input id="kmTaskText" class="km-input" placeholder="Новая задача…"><input id="kmTaskDue" type="date" class="km-input km-due"><button class="km-btn" id="kmTaskAdd">+</button></div>' +
-        '<div id="kmTaskList" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card">' +
         '<div class="km-card-head"><span>⏱ Моё время сегодня <span id="kmEntriesSum" class="km-muted"></span></span></div>' +
         '<div id="kmEntries" class="km-list"></div>' +
+      '</div>' +
+      '<div class="km-card" id="kmRemCard">' +
+        '<div class="km-card-head"><span>⏰ Напоминания на сегодня</span></div>' +
+        '<div id="kmRemView" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card km-events-card">' +
         '<div class="km-card-head"><span>🛡 Активность / антифрод</span></div>' +
@@ -4811,9 +4920,7 @@ newText.focus();
     el('kmStartBtn').onclick = kmStartTimer;
     el('kmStopBtn').onclick = () => kmStopTimer('manual');
     el('kmChkAdd').onclick = addChecklist;
-    el('kmTaskAdd').onclick = addTask;
     el('kmChkText').addEventListener('keydown', e => { if (e.key === 'Enter') addChecklist(); });
-    el('kmTaskText').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
     if (KM.doc.timer && KM.doc.timer.running) {
       el('kmStartBtn').style.display = 'none';
       el('kmStopBtn').style.display = 'inline-block';
@@ -4822,23 +4929,33 @@ newText.focus();
       kmTimerId = setInterval(kmTick, 1000);
     }
     renderSheet();
+    renderRemView();
+  }
+
+  function renderStats() {
+    const box = el('kmStats');
+    if (!box || !KM.doc) return;
+    const norm = NORM_H * 3600000;
+    const worked = workedMs();
+    const unused = Math.max(0, norm - worked);
+    box.innerHTML =
+      '<span>Рабочее окно <b>' + pad2(WIN_START) + ':00–' + pad2(WIN_END) + ':00</b></span>' +
+      '<span>Норма <b>' + fmtDur(norm) + '</b></span>' +
+      '<span>Отработано <b>' + fmtDur(worked) + '</b></span>' +
+      '<span class="' + (unused > 0 ? 'neg' : '') + '">Не использовано <b>' + fmtDur(unused) + '</b></span>';
   }
 
   function renderSheet() {
     if (!KM.doc) return;
     const chk = el('kmChkList');
-    if (chk) chk.innerHTML = KM.doc.checklist.length ? KM.doc.checklist.map(it =>
-      '<div class="km-item' + (it.done ? ' done' : '') + '">' +
-        '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '><span>' + esc(it.text) + '</span></label>' +
-        '<button class="km-del" data-chkdel="' + it.id + '">✕</button>' +
-      '</div>').join('') : '<div class="km-muted">Пока пусто</div>';
-    const tl = el('kmTaskList');
-    if (tl) tl.innerHTML = KM.doc.tasks.length ? KM.doc.tasks.map(t =>
-      '<div class="km-item' + (t.done ? ' done' : '') + '">' +
-        '<label><input type="checkbox" data-task="' + t.id + '"' + (t.done ? ' checked' : '') + '><span>' + esc(t.text) + '</span></label>' +
-        '<span class="km-muted">' + (t.deadline ? esc(t.deadline) : '') + '</span>' +
-        '<button class="km-del" data-taskdel="' + t.id + '">✕</button>' +
-      '</div>').join('') : '<div class="km-muted">Пока пусто</div>';
+    if (chk) chk.innerHTML = KM.doc.checklist.length ? KM.doc.checklist.map(it => {
+      const isAdmin = it.by === 'admin';
+      return '<div class="km-item' + (it.done ? ' done' : '') + '">' +
+        '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '>' +
+        '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + '</span></label>' +
+        (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '">✕</button>') +
+      '</div>';
+    }).join('') : '<div class="km-muted">Пока пусто</div>';
     const en = el('kmEntries');
     const todays = KM.doc.entries.filter(x => x.date === today()).sort((a, b) => b.startTs - a.startTs);
     if (en) en.innerHTML = todays.length ? todays.map(x =>
@@ -4848,9 +4965,26 @@ newText.focus();
     const ev = el('kmEvents');
     if (ev) ev.innerHTML = KM.doc.events.slice(0, 12).map(e => {
       const t = new Date(e.ts);
-      const lbl = { start: '▶ старт', stop: '■ стоп', bg: '⚠ свернул вкладку', idle: '⚠ бездействие', offline: '⚠ закрыл приложение', logout: 'стоп (выход)' }[e.type] || e.type;
+      const lbl = { start: '▶ старт', stop: '■ стоп', bg: '⚠ свернул вкладку', idle: '⚠ бездействие', offline: '⚠ закрыл приложение', logout: 'стоп (выход)', alarm: '⏰ напоминание' }[e.type] || e.type;
       return '<div class="km-ev">' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + ' — ' + lbl + (e.note ? ' · ' + esc(e.note) : '') + '</div>';
     }).join('') || '<div class="km-muted">Нет событий</div>';
+    renderStats();
+    renderRemView();
+  }
+
+  function renderRemView() {
+    const box = el('kmRemView');
+    if (!box) return;
+    if (!KM.reminders.length) { box.innerHTML = '<div class="km-muted">Нет напоминаний</div>'; return; }
+    const fired = KM.doc ? (KM.doc.fired || []) : [];
+    box.innerHTML = KM.reminders.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r => {
+      const isDone = fired.includes(r.id + '@' + today());
+      return '<div class="km-rem-item">' +
+        '<span class="km-rem-time">' + esc(r.time) + '</span>' +
+        '<span class="km-rem-text' + (isDone ? '' : '') + '">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-who">' + (isDone ? '✓ выполнено' : 'не отмечено') + '</span>' +
+      '</div>';
+    }).join('');
   }
 
   function addChecklist() {
@@ -4859,24 +4993,18 @@ newText.focus();
     el('kmChkText').value = '';
     renderSheet(); kmPushSoon();
   }
-  function addTask() {
-    const v = el('kmTaskText').value.trim(); if (!v) return;
-    KM.doc.tasks.push({ id: uid(), text: v, done: false, deadline: el('kmTaskDue').value || '', created: Date.now(), doneAt: null, result: '' });
-    el('kmTaskText').value = ''; el('kmTaskDue').value = '';
-    renderSheet(); kmPushSoon();
-  }
 
   document.addEventListener('click', e => {
-    const t = e.target.closest ? e.target.closest('[data-chk],[data-chkdel],[data-task],[data-taskdel]') : null;
+    const t = e.target.closest ? e.target.closest('[data-chk],[data-chkdel]') : null;
     if (!t || !KM.doc) return;
     const chk = t.getAttribute('data-chk');
-    if (chk) { const it = KM.doc.checklist.find(x => x.id === chk); if (it) { it.done = t.checked; it.ts = Date.now(); renderSheet(); kmPushSoon(); } return; }
+    if (chk) {
+      const it = KM.doc.checklist.find(x => x.id === chk);
+      if (it) { it.done = t.checked; it.doneTs = it.done ? Date.now() : null; renderSheet(); kmPushSoon(); }
+      return;
+    }
     const chkd = t.getAttribute('data-chkdel');
-    if (chkd) { KM.doc.checklist = KM.doc.checklist.filter(x => x.id !== chkd); renderSheet(); kmPushSoon(); return; }
-    const tk = t.getAttribute('data-task');
-    if (tk) { const it = KM.doc.tasks.find(x => x.id === tk); if (it) { it.done = t.checked; it.doneAt = it.done ? Date.now() : null; renderSheet(); kmPushSoon(); } return; }
-    const tkd = t.getAttribute('data-taskdel');
-    if (tkd) { KM.doc.tasks = KM.doc.tasks.filter(x => x.id !== tkd); renderSheet(); kmPushSoon(); return; }
+    if (chkd) { KM.doc.checklist = KM.doc.checklist.filter(x => x.id !== chkd); renderSheet(); kmPushSoon(); }
   });
 
   function kmStartTimer() {
@@ -4894,7 +5022,7 @@ newText.focus();
   }
   function kmStopTimer(reason) {
     if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
-    const startTs = KM.doc.timer.startTs, topic = KM.doc.timer.topic || 'Работа';
+    const startTs = KM.doc.timer.startTs, topic = KM.doc.timer.topic || 'Задача';
     const endTs = Date.now();
     if (endTs - startTs > 30000) {
       KM.doc.entries.push({ id: uid(), date: today(), start: hhmm(startTs), end: hhmm(endTs), startTs: startTs, endTs: endTs, text: topic });
@@ -4916,7 +5044,7 @@ newText.focus();
     const ms = Date.now() - KM.doc.timer.startTs;
     const c = el('kmClock'); if (c) c.textContent = fmtClock(ms);
     const s = el('kmTimerSub'); if (s) s.textContent = 'Работаю · ' + (KM.doc.timer.topic || 'без темы');
-    const d = el('kmDayTotal'); if (d) d.textContent = 'Итого за сегодня: ' + fmtDur(todayMs() + ms) + ' (включая текущий)';
+    renderStats();
   }
 
   function markActivity() { KM.lastActivity = Date.now(); }
@@ -4954,8 +5082,10 @@ newText.focus();
     KM.doc.lastSeen = Date.now();
     const dot = el('kmOnlineDot'); if (dot) dot.style.color = '#22c55e';
     try {
+      await kmFetchReminders();
       await kmPushNow();
       const n = el('kmNet'); if (n) n.textContent = 'синхр. ' + new Date().toLocaleTimeString('ru-RU');
+      checkReminders();
     } catch (e) {
       const dot2 = el('kmOnlineDot'); if (dot2) dot2.style.color = '#ef4444';
       const n = el('kmNet'); if (n) n.textContent = 'нет связи';
@@ -4972,11 +5102,82 @@ newText.focus();
     pushTimer = null;
     try {
       KM.doc.lastSeen = Date.now();
-      await kmPut({ id: KM.kmId, name: KM.name, pinHash: KM.pinHash, doc: KM.doc });
+      let rec = null;
+      try { rec = await kmGet(KM.kmId); } catch (e) {}
+      KM._remoteChecklist = rec && rec.doc && Array.isArray(rec.doc.checklist) ? rec.doc.checklist : [];
+      kmMergeChecklist();
+      await kmPut({ id: KM.kmId, name: KM.name, pin: KM.pin, pinHash: KM.pinHash, doc: KM.doc });
+      KM._remoteChecklist = null;
     } catch (e) {}
   }
 
-  /* ============ admin ============ */
+  /* ============ напоминания / будильники ============ */
+  async function kmFetchReminders() {
+    if (!cfgReady()) return;
+    try {
+      const list = await remindersGet();
+      const mine = list.filter(r => r.kmIds === 'all' || (Array.isArray(r.kmIds) && r.kmIds.includes(KM.kmId)));
+      KM.reminders = mine;
+      renderRemView();
+    } catch (e) {}
+  }
+  function checkReminders() {
+    if (!KM.doc || !KM.reminders.length) return;
+    const now = Date.now();
+    const fired = KM.doc.fired;
+    KM.reminders.forEach(r => {
+      if (!r || !r.time) return;
+      const parts = String(r.time).split(':');
+      const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+      if (isNaN(h) || isNaN(m)) return;
+      const sched = new Date(); sched.setHours(h, m, 0, 0);
+      if (now < sched.getTime()) return;
+      if (now - sched.getTime() > ALARM_GRACE_MS) return;
+      const key = r.id + '@' + today();
+      if (fired.indexOf(key) !== -1) return;
+      fired.push(key);
+      logEvent('alarm', r.text);
+      showAlarm(r.text);
+      beep();
+      kmPushSoon();
+      renderRemView();
+    });
+  }
+  function showAlarm(text) {
+    const old = document.querySelector('.km-alarm');
+    if (old) old.remove();
+    const w = ce('div', 'km-alarm');
+    w.innerHTML = '<h4>⏰ Напоминание</h4><p>' + esc(text) + '</p><button id="kmAlarmOk">Хорошо</button>';
+    document.body.appendChild(w);
+    w.querySelector('#kmAlarmOk').onclick = () => w.remove();
+    try {
+      if (window.Notification && Notification.permission === 'granted') {
+        new Notification('⏰ Задачник', { body: text });
+      }
+    } catch (e) {}
+  }
+  function beep() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      o.connect(g); g.connect(audioCtx.destination);
+      const t = audioCtx.currentTime;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+      o.start(t); o.stop(t + 0.65);
+    } catch (e) {}
+  }
+  function requestNotifPermission() {
+    try {
+      if (window.Notification && Notification.permission === 'default' && Notification.requestPermission) {
+        Notification.requestPermission().catch(() => {});
+      }
+    } catch (e) {}
+  }
+
+  /* ============ админ: панель ============ */
   function buildAdminPanel() {
     const panel = el('panel-km');
     if (!panel) return;
@@ -4995,10 +5196,58 @@ newText.focus();
         '</div>' +
         '<div class="km-muted" id="kmAddMsg"></div>' +
       '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>✅ Задача в чеклист дня</span></div>' +
+        '<div class="km-row">' +
+          '<input id="kmAdminTaskText" class="km-input" placeholder="Например: сдать срез к 18:00">' +
+          '<button class="km-btn" id="kmAdminTaskBtn">Назначить</button>' +
+        '</div>' +
+        '<div class="km-targets" id="kmTaskTargets"></div>' +
+        '<div class="km-muted" id="kmTaskMsg"></div>' +
+      '</div>' +
+      '<div class="km-card">' +
+        '<div class="km-card-head"><span>⏰ Напоминания (будильники)</span></div>' +
+        '<div class="km-row">' +
+          '<input id="kmRemTime" type="time" class="km-input km-due" value="18:00">' +
+          '<input id="kmRemText" class="km-input" placeholder="Текст напоминания">' +
+          '<button class="km-btn" id="kmRemAddBtn">Добавить</button>' +
+        '</div>' +
+        '<div class="km-targets" id="kmRemTargets"></div>' +
+        '<div id="kmRemAdminList" class="km-list"></div>' +
+        '<div class="km-muted" id="kmRemMsg"></div>' +
+      '</div>' +
       '<div id="kmAdminList" class="km-admin-list"></div>';
     el('kmCfgBtn').onclick = openCfgModal;
     el('kmRefreshBtn').onclick = () => kmRenderAdmin(true);
     el('kmAddKmBtn').onclick = adminAddKm;
+    el('kmAdminTaskBtn').onclick = adminAssignTask;
+    el('kmRemAddBtn').onclick = adminAddReminder;
+  }
+
+  function renderTargets(boxId) {
+    const box = el(boxId);
+    if (!box) return;
+    box.innerHTML =
+      '<div class="km-targets-bar"><label><input type="checkbox" class="tg-all"> Всем КМ</label></div>' +
+      '<div class="km-targets-list">' +
+        (KM.adminRows.length
+          ? KM.adminRows.map(r => '<label><input type="checkbox" class="tg-one" data-km="' + esc(r.id) + '"> ' + esc(r.name) + '</label>').join('')
+          : '<span class="km-muted">нет КМ</span>') +
+      '</div>';
+  }
+  function readTargets(boxId) {
+    const box = el(boxId);
+    if (!box) return [];
+    const all = box.querySelector('.tg-all');
+    if (all && all.checked) return 'all';
+    return Array.prototype.slice.call(box.querySelectorAll('.tg-one:checked')).map(i => i.getAttribute('data-km'));
+  }
+  function targetNames(sel) {
+    if (sel === 'all') return 'всем КМ';
+    if (!sel.length) return '';
+    return sel.length === 1
+      ? ((KM.adminRows.find(r => r.id === sel[0]) || {}).name || '')
+      : sel.length + ' КМ';
   }
 
   function openCfgModal() {
@@ -5021,8 +5270,13 @@ newText.focus();
       const err = w.querySelector('#cfgErr');
       if (!token) { err.textContent = 'Вставьте токен'; return; }
       err.textContent = 'Подключение…';
-      try { await gistSetup(token); w.remove(); kmRenderAdmin(true); }
-      catch (e) { err.textContent = e.message; }
+      try {
+        await gistSetup(token);
+        w.remove();
+        topEmpButtons(true);
+        await syncRosterToEmployees();
+        kmRenderAdmin(true);
+      } catch (e) { err.textContent = e.message; }
     };
   }
 
@@ -5036,22 +5290,98 @@ newText.focus();
     const kmId = uid();
     try {
       const h = await pinHash(kmId, pin);
-      await kmPut({ id: kmId, name: name, pinHash: h, doc: emptyDoc() });
+      await kmPut({ id: kmId, name: name, pin: pin, pinHash: h, doc: emptyDoc() });
       el('kmNewName').value = ''; el('kmNewPin').value = '';
       msg.textContent = 'Добавлен: ' + name;
+      await syncRosterToEmployees();
       kmRenderAdmin(true);
     } catch (e) { msg.textContent = e.message; }
+  }
+
+  async function adminAssignTask() {
+    const text = el('kmAdminTaskText').value.trim();
+    const sel = readTargets('kmTaskTargets');
+    const msg = el('kmTaskMsg');
+    if (!text) { msg.textContent = 'Введите текст задачи'; return; }
+    if (!sel.length) { msg.textContent = 'Выберите кому назначить (отметьте КМ или «Всем»)'; return; }
+    const ids = sel === 'all' ? KM.adminRows.map(r => r.id) : sel;
+    if (!ids.length) { msg.textContent = 'Нет КМ в списке'; return; }
+    msg.textContent = 'Отправка…';
+    let ok = 0;
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        const rec = await kmGet(ids[i]);
+        if (!rec) continue;
+        rec.doc = rec.doc && typeof rec.doc === 'object' ? rec.doc : {};
+        rec.doc.checklist = Array.isArray(rec.doc.checklist) ? rec.doc.checklist : [];
+        rec.doc.checklist.unshift({ id: uid(), text: text, done: false, ts: Date.now(), by: 'admin' });
+        await kmPut(rec);
+        ok++;
+      } catch (e) {}
+    }
+    el('kmAdminTaskText').value = '';
+    msg.textContent = 'Назначено «' + text + '» → ' + targetNames(sel) + ' (' + ok + ' из ' + ids.length + ')';
+    kmRenderAdmin(true);
+  }
+
+  async function adminAddReminder() {
+    const time = el('kmRemTime').value;
+    const text = el('kmRemText').value.trim();
+    const sel = readTargets('kmRemTargets');
+    const msg = el('kmRemMsg');
+    if (!time || !text) { msg.textContent = 'Укажите время и текст'; return; }
+    if (!sel.length) { msg.textContent = 'Выберите кому напоминать'; return; }
+    if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
+    try {
+      const list = await remindersGet();
+      list.push({ id: uid(), time: time, text: text, kmIds: sel, created: Date.now() });
+      await remindersPut(list);
+      el('kmRemText').value = '';
+      msg.textContent = 'Добавлено: ' + time + ' — ' + text + ' → ' + targetNames(sel);
+      kmRenderAdmin(true);
+    } catch (e) { msg.textContent = e.message; }
+  }
+
+  async function adminDelReminder(remId) {
+    try {
+      const list = await remindersGet();
+      await remindersPut(list.filter(r => r.id !== remId));
+      kmRenderAdmin(true);
+    } catch (e) { alert(e.message); }
   }
 
   async function kmRenderAdmin() {
     const conn = el('kmConn');
     if (!conn) return;
-    if (!cfgReady()) { conn.textContent = '☁ облако не подключено — нажмите «⚙ Настройки облака»'; el('kmAdminList').innerHTML = ''; return; }
+    if (!cfgReady()) {
+      conn.textContent = '☁ облако не подключено — нажмите «⚙ Настройки облака»';
+      el('kmAdminList').innerHTML = '';
+      renderTargets('kmTaskTargets'); renderTargets('kmRemTargets');
+      el('kmRemAdminList').innerHTML = '';
+      return;
+    }
     conn.textContent = '☁ подключено: ' + (KM.cfg.login ? KM.cfg.login + ' · ' : '') + 'gist ' + KM.cfg.gistId.slice(0, 8);
-    let rows;
-    try { rows = await adminRowsAll(); }
-    catch (e) { conn.textContent = '⚠ ' + e.message; return; }
+    let rows, rems;
+    try {
+      const g = await gistGet();
+      rows = parseFiles(g);
+      const rf = (g.files || {})[REM_FILE];
+      rems = (rf && rf.content) ? (JSON.parse(rf.content) || []) : [];
+      if (!Array.isArray(rems)) rems = [];
+    } catch (e) { conn.textContent = '⚠ ' + e.message; return; }
     KM.adminRows = rows || [];
+    KM.reminders = rems;
+    renderTargets('kmTaskTargets');
+    renderTargets('kmRemTargets');
+
+    el('kmRemAdminList').innerHTML = rems.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r =>
+      '<div class="km-rem-item">' +
+        '<span class="km-rem-time">' + esc(r.time) + '</span>' +
+        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
+        '<button class="km-del" data-delrem="' + esc(r.id) + '">✕</button>' +
+      '</div>').join('') || '<div class="km-muted">Нет напоминаний</div>';
+
     const now = Date.now();
     el('kmAdminList').innerHTML = KM.adminRows.map(r => {
       const doc = normDoc(r.doc);
@@ -5060,20 +5390,19 @@ newText.focus();
       const todayEntries = doc.entries.filter(x => x.date === today());
       const ms = todayEntries.reduce((s, x) => s + (x.endTs - x.startTs), 0) + (running ? now - doc.timer.startTs : 0);
       const chkDone = doc.checklist.filter(x => x.done).length;
-      const openTasks = doc.tasks.filter(x => !x.done).length;
       const lastEv = doc.events[0];
       const link = kmLink(r.id);
       return '<div class="km-acard">' +
         '<div class="km-acard-head">' +
           '<span style="color:' + (online ? '#22c55e' : '#71717a') + '">●</span>' +
           '<b>' + esc(r.name) + '</b>' +
+          (r.pin ? '<span class="km-pin-lbl">ПИН</span><span class="km-pin">' + esc(r.pin) + '</span>' : '') +
           (running ? '<span class="km-badge run">⏱ ' + fmtClock(now - doc.timer.startTs) + '</span>' : '') +
           (online ? '<span class="km-badge on">онлайн</span>' : '<span class="km-badge off">офлайн</span>') +
         '</div>' +
         '<div class="km-acard-stats">' +
           '<span>Сегодня: <b>' + fmtDur(ms) + '</b></span>' +
           '<span>Чеклист: <b>' + chkDone + '/' + doc.checklist.length + '</b></span>' +
-          '<span>Задачи: <b>' + openTasks + '</b></span>' +
         '</div>' +
         (lastEv ? '<div class="km-acard-ev km-muted">посл. событие: ' + esc(lastEv.type) + '</div>' : '') +
         '<div class="km-acard-actions">' +
@@ -5090,9 +5419,22 @@ newText.focus();
     return base + '#km?g=' + encodeURIComponent(KM.cfg.gistId) + '&t=' + encodeURIComponent(KM.cfg.token) + '&id=' + encodeURIComponent(kmId);
   }
 
+  document.addEventListener('change', e => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('tg-all')) {
+      const box = t.closest ? t.closest('.km-targets') : null;
+      if (box) Array.prototype.forEach.call(box.querySelectorAll('.tg-one'), i => { i.checked = t.checked; });
+    }
+  });
+
   document.addEventListener('click', e => {
-    const c = e.target.closest ? e.target.closest('[data-copy],[data-delkm],[data-show]') : null;
+    const c = e.target.closest ? e.target.closest('[data-copy],[data-delkm],[data-show],[data-delrem]') : null;
     if (!c) return;
+    const dr = c.getAttribute('data-delrem');
+    if (dr) {
+      if (confirm('Удалить это напоминание?')) adminDelReminder(dr);
+      return;
+    }
     const cp = c.getAttribute('data-copy');
     if (cp) {
       if (navigator.clipboard) navigator.clipboard.writeText(cp);
@@ -5103,7 +5445,7 @@ newText.focus();
     const dk = c.getAttribute('data-delkm');
     if (dk) {
       if (confirm('Удалить КМ «' + c.getAttribute('data-name') + '» из облака?')) {
-        kmDelete(dk).then(() => kmRenderAdmin()).catch(err => alert(err.message));
+        kmDelete(dk).then(() => syncRosterToEmployees()).then(() => kmRenderAdmin()).catch(err => alert(err.message));
       }
       return;
     }
@@ -5120,9 +5462,8 @@ newText.focus();
     const w = ce('div', 'km-modal-bg');
     w.innerHTML =
       '<div class="km-modal km-modal-wide">' +
-        '<h3>' + esc(r.name) + '</h3>' +
-        '<div class="km-view-sec"><b>Чеклист</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
-        '<div class="km-view-sec"><b>Задачи</b><br>' + (doc.tasks.map(x => (x.done ? '☑ ' : '☐ ') + esc(x.text) + (x.deadline ? ' (до ' + esc(x.deadline) + ')' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<h3>' + esc(r.name) + (r.pin ? ' <span class="km-pin">ПИН ' + esc(r.pin) + '</span>' : '') + '</h3>' +
+        '<div class="km-view-sec"><b>Чеклист дня</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + (x.by === 'admin' ? '📌 ' : '') + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-view-sec"><b>Время (последние записи)</b><br>' + (entries.map(x => esc(x.date) + ' ' + esc(x.start) + '–' + esc(x.end) + ' · ' + fmtDur(x.endTs - x.startTs) + ' · ' + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-view-sec"><b>События</b><br>' + (doc.events.slice(0, 20).map(e => esc(e.type) + ' ' + new Date(e.ts).toLocaleString('ru-RU')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-modal-btns"><button class="km-btn" id="vClose">Закрыть</button></div>' +
@@ -5158,6 +5499,11 @@ newText.focus();
       startAdminPoll();
     });
   }
+  function hookTeamTab() {
+    const btn = document.querySelector('.tabs [data-tab="team"]');
+    if (!btn) return;
+    btn.addEventListener('click', () => { if (cfgReady()) syncRosterToEmployees(); });
+  }
   function startAdminPoll() {
     if (KM.pollId) clearInterval(KM.pollId);
     KM.pollId = setInterval(() => {
@@ -5177,8 +5523,13 @@ newText.focus();
       kmShowLogin(p.id || '');
       return;
     }
+    if (cfgReady()) {
+      topEmpButtons(true);
+      syncRosterToEmployees();
+    }
     kmAdminTabButton();
     hookAdminTab();
+    hookTeamTab();
     buildAdminPanel();
   }
 
