@@ -735,6 +735,35 @@
   .km-call-item .cl-mark { min-width: 20px; text-align: center; }
   .km-call-item .km-input { flex: 1; min-width: 140px; padding: 5px 8px; font-size: 13px; }
   .km-call-hint { font-size: 12px; color: #a1a1aa; margin-top: 6px; }
+  .mselect { position: relative; }
+  .mselect-toggle { width: 100%; text-align: left; background: #1e1e2e; color: #e4e4e7; border: 1px solid #3f3f56;
+    border-radius: 8px; padding: 9px 30px 9px 12px; font-size: 14px; cursor: pointer; position: relative; }
+  .mselect-toggle:after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #71717a; }
+  .mselect.open .mselect-toggle { border-color: #6366f1; }
+  .mselect-panel { display: none; position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
+    background: #232334; border: 1px solid #3f3f56; border-radius: 8px; padding: 6px; max-height: 220px; overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .mselect.open .mselect-panel { display: block; }
+  .mselect-panel label { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
+    font-size: 14px; color: #e4e4e7; cursor: pointer; }
+  .mselect-panel label:hover { background: #2b2b52; }
+  .mselect-panel .ms-sep { height: 1px; background: #3f3f56; margin: 5px 2px; }
+  .mselect-panel .ms-all { font-weight: 600; }
+  .km-task-form { border: 1px solid #2e2e42; border-radius: 10px; padding: 10px; margin-top: 10px; background: #232334; }
+  .km-task-form .km-row { flex-wrap: wrap; }
+  .km-task-form .km-input { flex: 1 1 160px; }
+  .km-task-form .km-due { flex: 0 0 120px; }
+  .km-task-form .mselect { flex: 1 1 100%; }
+  .km-chk-form .mselect-toggle { padding: 8px 30px 8px 10px; font-size: 13px; }
+  .km-plus { background: #3f3f56; color: #e4e4e7; border: none; border-radius: 8px; width: 34px; height: 34px;
+    font-size: 18px; cursor: pointer; flex: 0 0 auto; }
+  .km-plus:hover { background: #4b4b66; }
+  .km-task-meta { color: #71717a; font-size: 11px; }
+  .km-task-due { color: #fbbf24; font-size: 12px; font-family: ui-monospace, monospace; }
+  .km-task-rep { color: #818cf8; font-size: 11px; }
+  .km-view-sec b { color: #a5b4fc; }
+  .km-view-call { font-size: 13px; padding: 3px 0; color: #d4d4d8; }
+  .km-task-editing { background: #2b2b52; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
 </style>
 </head>
 <body>
@@ -1217,7 +1246,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 35,
+    version: 36,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4758,7 +4787,7 @@ newText.focus();
       if (team) {
         const h = ce('div', 'km-hint');
         h.id = 'kmTeamHint';
-        h.innerHTML = '🛰 Список КМ — общий и ведётся во вкладке «КМ-листы»: там добавление и удаление. Здесь — только сессии, отсутствия и отчёты.';
+        h.innerHTML = '🛰 Список КМ — общий и ведётся во вкладке «КМ»: там добавление и удаление. Здесь — только сессии, отсутствия и отчёты.';
         team.insertBefore(h, team.firstChild);
       }
     }
@@ -4829,12 +4858,17 @@ newText.focus();
     const own = KM.doc.checklist.filter(x => x.by !== 'admin');
     const admins = remote.map(a => {
       const l = KM.doc.checklist.find(x => x.id === a.id);
+      const sameDay = l && l.doneDay === today();
+      const done = a.repeat ? (sameDay ? !!l.done : false) : (l ? !!l.done : false);
       return {
         id: a.id,
         text: a.text,
         by: 'admin',
-        done: l ? !!l.done : false,
-        doneTs: l ? (l.doneTs || null) : null,
+        due: a.due || '',
+        repeat: !!a.repeat,
+        done: done,
+        doneTs: done && l ? (l.doneTs || null) : null,
+        doneDay: sameDay ? today() : (done && l ? l.doneDay : null),
         ts: a.created || Date.now()
       };
     });
@@ -5108,9 +5142,11 @@ newText.focus();
     const chk = el('kmChkList');
     if (chk) chk.innerHTML = KM.doc.checklist.length ? KM.doc.checklist.map(it => {
       const isAdmin = it.by === 'admin';
+      const meta = (it.due ? '<span class="km-task-due">до ' + esc(it.due) + '</span>' : '') +
+        (it.repeat ? '<span class="km-task-rep">ежедневно</span>' : '');
       return '<div class="km-item' + (it.done ? ' done' : '') + '">' +
         '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '>' +
-        '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + '</span></label>' +
+        '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + (meta ? ' ' + meta : '') + '</span></label>' +
         (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '" data-text="' + esc(it.text) + '">✕</button>') +
       '</div>';
     }).join('') : '<div class="km-muted">Пока пусто</div>';
@@ -5158,7 +5194,7 @@ newText.focus();
     const chk = t.getAttribute('data-chk');
     if (chk) {
       const it = KM.doc.checklist.find(x => x.id === chk);
-      if (it) { it.done = t.checked; it.doneTs = it.done ? Date.now() : null; renderSheet(); kmPushSoon(); }
+      if (it) { it.done = t.checked; it.doneTs = it.done ? Date.now() : null; it.doneDay = it.done ? today() : null; renderSheet(); kmPushSoon(); }
       return;
     }
     const chkd = t.getAttribute('data-chkdel');
@@ -5442,22 +5478,31 @@ newText.focus();
       '</div>' +
       '<div class="km-card">' +
         '<div class="km-card-head"><span>✅ Задача в чеклист дня</span><span class="km-caret">▾</span></div>' +
-        '<div class="km-row">' +
-          '<input id="kmAdminTaskText" class="km-input" placeholder="Например: сдать срез к 18:00">' +
-          '<button class="km-btn" id="kmAdminTaskBtn">Назначить</button>' +
+        '<div class="km-task-form" id="kmTaskForm">' +
+          '<div class="km-row">' +
+            '<input id="kmAdminTaskText" class="km-input" placeholder="Текст задачи">' +
+            '<input id="kmAdminTaskDue" type="time" class="km-input km-due" title="Выполнить до (необязательно)">' +
+            '<label class="km-muted" style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="kmAdminTaskRepeat"> ежедневно</label>' +
+          '</div>' +
+          '<div class="km-row" style="margin-top:8px">' +
+            '<div class="km-targets" id="kmTaskTargets" style="flex:1"></div>' +
+            '<button class="km-btn" id="kmAdminTaskBtn">Назначить</button>' +
+            '<button class="km-plus" id="kmAdminTaskClear" title="Очистить форму">＋</button>' +
+          '</div>' +
         '</div>' +
-        '<div class="km-targets" id="kmTaskTargets"></div>' +
         '<div class="km-muted" id="kmTaskMsg"></div>' +
         '<div id="kmTaskAdminList" class="km-list"></div>' +
       '</div>' +
       '<div class="km-card">' +
         '<div class="km-card-head"><span>⏰ Напоминания (будильники)</span><span class="km-caret">▾</span></div>' +
         '<div class="km-row">' +
-          '<input id="kmRemTime" type="time" class="km-input km-due" value="18:00">' +
           '<input id="kmRemText" class="km-input" placeholder="Текст напоминания">' +
+          '<input id="kmRemTime" type="time" class="km-input km-due" value="18:00">' +
+        '</div>' +
+        '<div class="km-row" style="margin-top:8px">' +
+          '<div class="km-targets" id="kmRemTargets" style="flex:1"></div>' +
           '<button class="km-btn" id="kmRemAddBtn">Добавить</button>' +
         '</div>' +
-        '<div class="km-targets" id="kmRemTargets"></div>' +
         '<div id="kmRemAdminList" class="km-list"></div>' +
         '<div class="km-muted" id="kmRemMsg"></div>' +
       '</div>' +
@@ -5466,19 +5511,53 @@ newText.focus();
     el('kmRefreshBtn').onclick = () => kmRenderAdmin(true);
     el('kmAddKmBtn').onclick = adminAddKm;
     el('kmAdminTaskBtn').onclick = adminAssignTask;
+    el('kmAdminTaskClear').onclick = () => { KM._editTaskId = null; clearTaskForm(); };
+    el('kmAdminTaskClear').style.display = 'none';
     el('kmRemAddBtn').onclick = adminAddReminder;
+  }
+
+  function clearTaskForm() {
+    const t = el('kmAdminTaskText'); if (t) t.value = '';
+    const d = el('kmAdminTaskDue'); if (d) d.value = '';
+    const r = el('kmAdminTaskRepeat'); if (r) r.checked = false;
+    renderTargets('kmTaskTargets');
+    const btn = el('kmAdminTaskBtn'); if (btn) btn.textContent = 'Назначить';
+    const clr = el('kmAdminTaskClear'); if (clr) clr.style.display = 'none';
   }
 
   function renderTargets(boxId) {
     const box = el(boxId);
     if (!box) return;
+    const prev = readTargets(boxId);
     box.innerHTML =
-      '<div class="km-targets-bar"><label><input type="checkbox" class="tg-all"> Всем КМ</label></div>' +
-      '<div class="km-targets-list">' +
-        (KM.adminRows.length
-          ? KM.adminRows.map(r => '<label><input type="checkbox" class="tg-one" data-km="' + esc(r.id) + '"> ' + esc(r.name) + '</label>').join('')
-          : '<span class="km-muted">нет КМ</span>') +
+      '<div class="mselect" data-mselect>' +
+        '<button type="button" class="mselect-toggle"><span class="ms-label">Всем КМ</span></button>' +
+        '<div class="mselect-panel">' +
+          (KM.adminRows.length
+            ? '<label class="ms-all"><input type="checkbox" class="tg-all"> Всем КМ</label><div class="ms-sep"></div>' +
+              KM.adminRows.map(r => '<label><input type="checkbox" class="tg-one" data-km="' + esc(r.id) + '"> ' + esc(r.name) + '</label>').join('')
+            : '<span class="km-muted" style="padding:6px 8px;display:block">нет КМ</span>') +
+        '</div>' +
       '</div>';
+    applyTargets(boxId, prev);
+    updateMsLabel(boxId);
+  }
+  function applyTargets(boxId, sel) {
+    const box = el(boxId);
+    if (!box || !sel) return;
+    if (sel === 'all') { const a = box.querySelector('.tg-all'); if (a) a.checked = true; return; }
+    (Array.isArray(sel) ? sel : []).forEach(id => {
+      const i = box.querySelector('.tg-one[data-km="' + id + '"]');
+      if (i) i.checked = true;
+    });
+  }
+  function updateMsLabel(boxId) {
+    const box = el(boxId);
+    if (!box) return;
+    const lbl = box.querySelector('.ms-label');
+    if (!lbl) return;
+    const sel = readTargets(boxId);
+    lbl.textContent = sel === 'all' ? 'Всем КМ' : (sel.length ? targetNames(sel) : 'Выбрать КМ…');
   }
   function readTargets(boxId) {
     const box = el(boxId);
@@ -5491,8 +5570,13 @@ newText.focus();
     if (sel === 'all') return 'всем КМ';
     if (!sel.length) return '';
     return sel.length === 1
-      ? ((KM.adminRows.find(r => r.id === sel[0]) || {}).name || '')
+      ? ((KM.adminRows.find(r => r.id === sel[0]) || {}).name || '1 КМ')
       : sel.length + ' КМ';
+  }
+  function targetsShort(sel) {
+    if (sel === 'all') return 'всем';
+    if (!sel.length) return '—';
+    return sel.length === 1 ? ((KM.adminRows.find(r => r.id === sel[0]) || {}).name || '1 КМ') : sel.length + ' КМ';
   }
 
   function openCfgModal() {
@@ -5545,6 +5629,8 @@ newText.focus();
 
   async function adminAssignTask() {
     const text = el('kmAdminTaskText').value.trim();
+    const due = el('kmAdminTaskDue').value || '';
+    const repeat = !!(el('kmAdminTaskRepeat') && el('kmAdminTaskRepeat').checked);
     const sel = readTargets('kmTaskTargets');
     const msg = el('kmTaskMsg');
     if (!text) { msg.textContent = 'Введите текст задачи'; return; }
@@ -5552,45 +5638,68 @@ newText.focus();
     if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
     const ids = sel === 'all' ? KM.adminRows.map(r => r.id) : sel;
     if (!ids.length) { msg.textContent = 'Нет КМ в списке'; return; }
-    msg.textContent = 'Отправка…';
+    msg.textContent = 'Сохранение…';
     try {
       const list = await tasksGet() || [];
-      list.unshift({ id: uid(), text: text, kmIds: sel, created: Date.now() });
-      await tasksPut(list);
-      for (let i = 0; i < ids.length; i++) {
-        try {
-          const rec = await kmGet(ids[i]);
-          if (!rec) continue;
-          rec.doc = normDoc(rec.doc);
-          rec.doc.checklist = rec.doc.checklist.filter(x => x.by !== 'admin');
-          await kmPut(rec);
-        } catch (e) {}
+      if (KM._editTaskId) {
+        const it = list.find(x => x.id === KM._editTaskId);
+        if (it) { it.text = text; it.due = due; it.repeat = repeat; it.kmIds = sel; }
+        KM._editTaskId = null;
+      } else {
+        list.unshift({ id: uid(), text: text, due: due, repeat: repeat, kmIds: sel, created: Date.now() });
       }
+      await tasksPut(list);
+      await adminPushChecklists(list, ids);
       el('kmAdminTaskText').value = '';
-      msg.textContent = 'Назначено «' + text + '» → ' + targetNames(sel);
+      el('kmAdminTaskDue').value = '';
+      if (el('kmAdminTaskRepeat')) el('kmAdminTaskRepeat').checked = false;
+      el('kmAdminTaskBtn').textContent = 'Назначить';
+      el('kmAdminTaskClear').style.display = 'none';
+      msg.textContent = 'Сохранено «' + text + '» → ' + targetNames(sel);
       kmRenderAdmin(true);
     } catch (e) { msg.textContent = e.message; }
   }
 
-  async function adminEditTask(id) {
-    try {
-      const list = await tasksGet() || [];
-      const it = list.find(x => x.id === id);
-      if (!it) return;
-      const nt = prompt('Текст задачи:', it.text);
-      if (nt === null) return;
-      const t = nt.trim();
-      if (!t) return;
-      it.text = t;
-      await tasksPut(list);
-      kmRenderAdmin(true);
-    } catch (e) { alert(e.message); }
+  async function adminPushChecklists(list, ids) {
+    for (let i = 0; i < ids.length; i++) {
+      let accepts;
+      try {
+        const rec = await kmGet(ids[i]);
+        if (!rec) continue;
+        rec.doc = normDoc(rec.doc);
+        rec.doc.checklist = rec.doc.checklist.filter(x => x.by !== 'admin');
+        await kmPut(rec);
+      } catch (e) {}
+    }
+    return list;
+  }
+
+  function adminEditTask(id) {
+    const tks = KM.adminTasks || [];
+    const it = tks.find(x => x.id === id);
+    if (!it) return;
+    KM._editTaskId = id;
+    el('kmAdminTaskText').value = it.text || '';
+    el('kmAdminTaskDue').value = it.due || '';
+    if (el('kmAdminTaskRepeat')) el('kmAdminTaskRepeat').checked = !!it.repeat;
+    renderTargets('kmTaskTargets');
+    applyTargets('kmTaskTargets', it.kmIds);
+    updateMsLabel('kmTaskTargets');
+    el('kmAdminTaskBtn').textContent = 'Сохранить';
+    el('kmAdminTaskClear').style.display = 'inline-block';
+    el('kmTaskMsg').textContent = 'Правка задачи — измените и нажмите «Сохранить»';
+    const card = el('kmTaskForm');
+    if (card && card.parentElement) card.parentElement.classList.remove('collapsed');
+    location.hash = '#';
+    const btn = document.querySelector('.tabs [data-tab="km"]');
+    if (btn) btn.scrollIntoView && btn.scrollIntoView();
   }
 
   async function adminDelTask(id) {
     try {
       const list = await tasksGet() || [];
       await tasksPut(list.filter(x => x.id !== id));
+      if (KM._editTaskId === id) { KM._editTaskId = null; clearTaskForm(); }
       kmRenderAdmin(true);
     } catch (e) { alert(e.message); }
   }
@@ -5661,13 +5770,20 @@ newText.focus();
     KM.adminRows = rows || [];
     KM.reminders = rems;
     KM.adminTasks = tks;
+    if (KM._editTaskId && !tks.find(x => x.id === KM._editTaskId)) KM._editTaskId = null;
     renderTargets('kmTaskTargets');
     renderTargets('kmRemTargets');
+    if (KM._editTaskId) {
+      const et = tks.find(x => x.id === KM._editTaskId);
+      if (et) { applyTargets('kmTaskTargets', et.kmIds); updateMsLabel('kmTaskTargets'); }
+    }
 
     el('kmTaskAdminList').innerHTML = tks.length ? tks.map(r =>
-      '<div class="km-task-item">' +
+      '<div class="km-task-item' + (r.id === KM._editTaskId ? ' km-task-editing' : '') + '">' +
         '<span class="km-rem-text">' + esc(r.text) + '</span>' +
-        '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
+        (r.due ? '<span class="km-task-due">до ' + esc(r.due) + '</span>' : '') +
+        (r.repeat ? '<span class="km-task-rep">ежедневно</span>' : '') +
+        '<span class="km-rem-who">' + esc(targetsShort(r.kmIds)) + '</span>' +
         '<button class="km-icon" data-edittask="' + esc(r.id) + '" title="Изменить">✏️</button>' +
         '<button class="km-del" data-deltask="' + esc(r.id) + '">✕</button>' +
       '</div>').join('') : '<div class="km-muted">Нет назначенных задач</div>';
@@ -5721,8 +5837,27 @@ newText.focus();
   document.addEventListener('change', e => {
     const t = e.target;
     if (t && t.classList && t.classList.contains('tg-all')) {
-      const box = t.closest ? t.closest('.km-targets') : null;
+      const box = t.closest ? t.closest('.mselect') : null;
       if (box) Array.prototype.forEach.call(box.querySelectorAll('.tg-one'), i => { i.checked = t.checked; });
+      const wrap = t.closest ? t.closest('.km-targets') : null;
+      if (wrap && wrap.id) updateMsLabel(wrap.id);
+    } else if (t && t.classList && t.classList.contains('tg-one')) {
+      const wrap = t.closest ? t.closest('.km-targets') : null;
+      if (wrap && wrap.id) updateMsLabel(wrap.id);
+    }
+  });
+
+  document.addEventListener('click', e => {
+    const tg = e.target.closest ? e.target.closest('.mselect-toggle') : null;
+    if (tg) {
+      const ms = tg.closest('.mselect');
+      const wasOpen = ms.classList.contains('open');
+      document.querySelectorAll('.mselect.open').forEach(m => m.classList.remove('open'));
+      if (!wasOpen) ms.classList.add('open');
+      return;
+    }
+    if (!e.target.closest || !e.target.closest('.mselect')) {
+      document.querySelectorAll('.mselect.open').forEach(m => m.classList.remove('open'));
     }
   });
 
@@ -5772,12 +5907,19 @@ newText.focus();
   function kmAdminViewDoc(r) {
     const doc = normDoc(r.doc);
     const entries = doc.entries.slice().sort((a, b) => b.startTs - a.startTs).slice(0, 30);
+    const calls = (doc.calls || []).slice().sort((a, b) => b.startTs - a.startTs).slice(0, 30);
     const w = ce('div', 'km-modal-bg');
     w.innerHTML =
       '<div class="km-modal km-modal-wide">' +
         '<h3>' + esc(r.name) + (r.pin ? ' <span class="km-pin">ПИН ' + esc(r.pin) + '</span>' : '') + '</h3>' +
-        '<div class="km-view-sec"><b>Чеклист дня</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + (x.by === 'admin' ? '📌 ' : '') + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
-        '<div class="km-view-sec"><b>Время (последние записи)</b><br>' + (entries.map(x => esc(x.date) + ' ' + esc(x.start) + '–' + esc(x.end) + ' · ' + fmtDur(x.endTs - x.startTs) + ' · ' + esc(x.text)).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>Чеклист дня</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + (x.by === 'admin' ? '📌 ' : '') + esc(x.text) + (x.due ? ' · <span class="km-task-due">до ' + esc(x.due) + '</span>' : '') + (x.repeat ? ' · <span class="km-task-rep">ежедневно</span>' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>📞 Звонки за день</b> <span class="km-muted">' + calls.length + '</span><br>' +
+          (calls.map(c => '<div class="km-view-call">' + (c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪') + ' ' +
+            esc(c.date) + ' ' + hhmm(c.startTs) + '–' + hhmm(c.endTs) + ' · ' + fmtDur(c.endTs - c.startTs) +
+            (c.task ? ' · задача: ' + esc(c.task) : '') +
+            (c.note ? '<br><span class="km-muted" style="margin-left:22px">💬 ' + esc(c.note) + '</span>' : '') +
+          '</div>').join('') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>Время (последние записи)</b><br>' + (entries.map(x => esc(x.date) + ' ' + esc(x.start) + '–' + esc(x.end) + ' · ' + fmtDur(x.endTs - x.startTs) + ' · ' + esc(x.text) + (x.note ? '<br><span class="km-muted" style="margin-left:14px">💬 ' + esc(x.note) + '</span>' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-view-sec"><b>События</b><br>' + (doc.events.slice(0, 20).map(e => esc(e.type) + ' ' + new Date(e.ts).toLocaleString('ru-RU')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-modal-btns"><button class="km-btn" id="vClose">Закрыть</button></div>' +
       '</div>';
@@ -5794,7 +5936,7 @@ newText.focus();
   function kmAdminTabButton() {
     const tabs = document.querySelector('.tabs');
     if (!tabs || tabs.querySelector('[data-tab="km"]')) return;
-    const b = ce('button', '', '🛰 КМ-листы');
+    const b = ce('button', '', '🛰 КМ');
     b.setAttribute('data-tab', 'km');
     tabs.appendChild(b);
   }
