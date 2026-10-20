@@ -5002,8 +5002,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('service-worker.js');
+      setInterval(() => { reg.update().catch(() => {}); }, 60000);
+      if (navigator.serviceWorker.controller) {
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          setStatus('ok', 'обновление версии…');
+          setTimeout(() => location.reload(), 300);
+        });
+      }
+    } catch (e) {}
   });
 }
 
