@@ -232,9 +232,7 @@
     margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px;
     border-left: 3px solid transparent;
   }
-  .task.overdue { border-left-color: #ef4444; }
-  .task.soon { border-left-color: #f59e0b; }
-  .task.done { opacity: 0.55; border-left-color: #22c55e; }
+  .task.done { opacity: 0.55; }
   .task.done .text { text-decoration: line-through; color: #a1a1aa; }
 
   .checkbox {
@@ -323,7 +321,7 @@
   .pulse-box {
     background: #2a2a3c; padding: 14px; border-radius: 12px;
     margin-top: 20px; margin-bottom: 14px;
-    border-left: 3px solid #6366f1;
+    overflow: hidden;
   }
   .pulse-header {
     display: flex; justify-content: space-between; align-items: center;
@@ -397,10 +395,7 @@
   .time-entry {
     display: flex; gap: 10px; align-items: flex-start;
     padding: 10px 12px; background: #23233a; border-radius: 8px; margin-bottom: 6px;
-    border-left: 3px solid #22d3ee;
   }
-  .time-entry.emp { border-left-color: #a78bfa; }
-  .time-entry.sync { border-left-color: #f97316; }
   .time-entry .t-content { flex: 1; min-width: 0; }
   .time-entry .t-text { font-size: 14px; word-break: break-word; cursor: text; outline: none; }
   .time-entry .t-text:focus { background: #1e1e2e; border-radius: 4px; padding: 2px 4px; }
@@ -508,11 +503,9 @@
   .call-line {
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     padding: 8px 12px; background: #0f172a; border-radius: 8px;
-    margin-bottom: 4px; border-left: 3px solid #64748b;
+    margin-bottom: 4px;
     font-size: 13px;
   }
-  .call-line.mark-ok { border-left-color: #22c55e; }
-  .call-line.mark-fail { border-left-color: #ef4444; }
   .call-line .cl-num {
     font-family: ui-monospace, monospace; color: #94a3b8;
     font-weight: bold; min-width: 30px;
@@ -547,7 +540,7 @@
   /* Верхняя карточка раздела «Сотрудники» */
   .team-top {
     background: #2a2a3c; padding: 14px; border-radius: 12px;
-    margin-bottom: 14px; border-left: 3px solid #a78bfa;
+    margin-bottom: 14px;
   }
   .team-top .emp-picker { background: transparent; padding: 0; margin-bottom: 10px; }
   .team-top .time-summary { background: transparent; padding: 0; margin-bottom: 0; }
@@ -555,7 +548,7 @@
   /* Аккордеоны раздела «Сотрудники» */
   .team-acc {
     background: #2a2a3c; border-radius: 12px; margin-bottom: 12px;
-    overflow: hidden; border-left: 3px solid #6366f1;
+    overflow: hidden;
   }
   .team-acc-header {
     padding: 14px; display: flex; gap: 10px; align-items: center;
@@ -570,7 +563,7 @@
   .team-acc.collapsed .team-acc-body { display: none; }
   .session-accordion {
     background: #23233a; border-radius: 10px; margin-bottom: 8px;
-    overflow: hidden; border-left: 3px solid #10b981;
+    overflow: hidden;
   }
   .session-acc-header {
     padding: 12px 14px; display: flex; gap: 10px; align-items: center;
@@ -609,7 +602,7 @@
     white-space: pre-wrap; word-break: break-word;
   }
   .sess-notes .notes-title { color: #94a3b8; margin-right: 4px; }
-  .sess-notes .os-block { border-left-width: 2px; margin-top: 4px; background: #0f172a;
+  .sess-notes .os-block { margin-top: 4px; background: #0f172a;
     border: 1px solid #2f2f4a; padding: 7px 10px; border-radius: 8px; }
   .sess-notes .os-block:first-child { margin-top: 0; }
   .sess-notes .os-block-label { color: #a1a1aa; font-weight: 600; margin-right: 4px; }
@@ -652,9 +645,9 @@
     border: 1px solid #2a2a3e; }
   .os-block { display: flex; gap: 8px; align-items: flex-start; padding: 7px 10px;
     border-radius: 8px; font-size: 12.5px; line-height: 1.45;
-    border-left: 3px solid #64748b; background: #1a1a2a; }
-  .os-block-script { border-left-color: #6366f1; background: #1c1c33; }
-  .os-block-os { border-left-color: #22c55e; background: #14241b; }
+    background: #1a1a2a; }
+  .os-block-script { background: #1c1c33; }
+  .os-block-os { background: #14241b; }
   .os-block-label { flex: 0 0 auto; font-weight: 700; font-size: 11px;
     white-space: nowrap; padding-top: 1px; }
   .os-block-os .os-block-label { color: #4ade80; }
@@ -867,13 +860,9 @@
     background: var(--surface-3); border-radius: var(--r-sm);
   }
   .time-summary { border: var(--dash); }
-  .team-acc, .time-day { border-left: 3px solid var(--accent); }
-  .team-top { border-left: 3px solid var(--purple); }
-  .pulse-box { border-left: 3px solid var(--accent); }
-  .task { background: var(--surface-2); border: var(--dash); border-left: 3px solid transparent;
+  .task { background: var(--surface-2); border: var(--dash);
     border-radius: var(--r-md); transition: transform .12s, border-color .15s, background .15s; }
   .task:hover { background: var(--surface-3); }
-  .session-accordion { border-left: 3px solid var(--green-dim); }
 
   /* --- Поля ввода (единый вид) --- */
   input[type="text"], input[type="time"], input[type="date"],
@@ -1015,7 +1004,7 @@
   /* v39: время закрытия / просрочка / статус КМ */
   .km-chk-time { font-size: 11px; color: var(--green); font-family: var(--mono); white-space: nowrap; }
   .km-chk-time.late { color: var(--red); font-weight: 700; }
-  .km-item.late { border-left: 3px solid var(--red); padding-left: 8px; background: rgba(251,113,133,.06); }
+  .km-item.late { background: rgba(251,113,133,.06); }
   .km-chk-late-note { font-size: 11px; color: var(--red); white-space: nowrap; }
   .km-rem-repeat { font-size: 11px; color: var(--purple); white-space: nowrap; }
   .km-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
@@ -1251,7 +1240,7 @@
   </div>
 
   <div class="tab-panel" id="panel-time">
-    <div class="team-top" style="border-left-color:#22c55e">
+    <div class="team-top">
       <div class="time-summary" id="timeSummary"></div>
       <div class="filters" style="margin:10px 0 0">
         <button data-tfilter="today" class="active">Сегодня</button>
@@ -1311,7 +1300,7 @@
   </div>
 
   <div class="tab-panel" id="panel-report">
-    <div class="pulse-box" style="border-left-color:#22c55e">
+    <div class="pulse-box">
       <div class="pulse-header">
         <h3>📊 Итоговый отчёт</h3>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1469,6 +1458,7 @@ const KEYS = {
   meta: 'tasker_data_v1_meta',
   sessions: 'tasker_data_v1_sessions',
   pulse: 'tasker_data_v1_pulse',
+  pulseFields: 'tasker_data_v1_pulseFields',
   sync: 'tasker_data_v1_sync',
   kmDist: 'tasker_data_v1_kmdist'
 };
@@ -1483,6 +1473,7 @@ let activeTimer = JSON.parse(localStorage.getItem(KEYS.timer) || 'null');
 let activeEmpTimer = JSON.parse(localStorage.getItem(KEYS.empTimer) || 'null');
 let meta = JSON.parse(localStorage.getItem(KEYS.meta) || '{"lastExport":null,"firstRun":' + Date.now() + '}');
 let dailyPulse = JSON.parse(localStorage.getItem(KEYS.pulse) || '{}');
+let pulseFields = JSON.parse(localStorage.getItem(KEYS.pulseFields) || 'null');
 let syncState = JSON.parse(localStorage.getItem(KEYS.sync)) ||
   { enabled: false, token: null, gistId: null, login: null, lastPush: null, autoPush: true };
 
@@ -1594,6 +1585,7 @@ function saveLocalNow() {
     localStorage.setItem(KEYS.absences, JSON.stringify(empAbsences));
     localStorage.setItem(KEYS.sessions, JSON.stringify(sessions));
     localStorage.setItem(KEYS.pulse, JSON.stringify(dailyPulse));
+    localStorage.setItem(KEYS.pulseFields, JSON.stringify(pulseFields));
     if (activeTimer) localStorage.setItem(KEYS.timer, JSON.stringify(activeTimer));
     else localStorage.removeItem(KEYS.timer);
     if (activeEmpTimer) localStorage.setItem(KEYS.empTimer, JSON.stringify(activeEmpTimer));
@@ -1652,9 +1644,9 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 48,
+    version: 49,
     exported: new Date().toISOString(),
-    tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
+    tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse, pulseFields
   };
 }
 
@@ -2335,19 +2327,32 @@ function calcPulseTotals(items) {
   return { planSum, factSum, hasPlan, hasFact };
 }
 
-function getRecentPulseLabels(dateStr) {
-  const base = new Date(dateStr + 'T00:00:00');
+function pulseFieldsEnsure() {
+  if (Array.isArray(pulseFields) && pulseFields.length) return;
   const labels = [];
   const seen = new Set();
-  for (let back = 1; back <= 2; back++) {
-    const d = new Date(base); d.setDate(d.getDate() - back);
-    const ds = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const dates = Object.keys(dailyPulse).sort().reverse();
+  for (const ds of dates) {
     (dailyPulse[ds] || []).forEach(it => {
       const l = (it.label || '').trim();
       if (l && !seen.has(l)) { seen.add(l); labels.push(l); }
     });
+    if (labels.length) break;
   }
-  return labels;
+  pulseFields = labels;
+}
+
+function pulseSyncDay(dateStr) {
+  pulseFieldsEnsure();
+  const existing = {};
+  (dailyPulse[dateStr] || []).forEach(it => {
+    const l = (it.label || '').trim();
+    if (l) existing[l] = it;
+  });
+  dailyPulse[dateStr] = pulseFields.map(name => {
+    const e = existing[name];
+    return { label: name, plan: e ? (e.plan || '') : '', fact: e ? (e.fact || '') : '' };
+  });
 }
 
 function renderPulse() {
@@ -2357,18 +2362,9 @@ function renderPulse() {
   if (!list) return;
 
   const dateStr = todayInput();
-  let items = getPulseForDate(dateStr);
-
-  if (items.length === 0 && meta.pulseSeedDate !== dateStr) {
-    const seed = getRecentPulseLabels(dateStr);
-    if (seed.length) {
-      dailyPulse[dateStr] = seed.map(l => ({ label: l, plan: '', fact: '' }));
-      items = dailyPulse[dateStr];
-      save();
-    }
-    meta.pulseSeedDate = dateStr;
-    save();
-  }
+  pulseFieldsEnsure();
+  pulseSyncDay(dateStr);
+  save();
 
   if (label) {
     const d = new Date(dateStr + 'T00:00:00');
@@ -2376,35 +2372,43 @@ function renderPulse() {
   }
 
   list.innerHTML = '';
-  if (items.length === 0) {
+  if (!pulseFields.length) {
     if (hint) hint.style.display = 'block';
     return;
   }
   if (hint) hint.style.display = 'none';
 
-  items.forEach((item, idx) => {
+  pulseFields.forEach((fieldName, idx) => {
+    const item = dailyPulse[dateStr][idx];
     const row = document.createElement('div');
     row.className = 'pulse-row';
 
     const lbl = document.createElement('input');
     lbl.type = 'text';
     lbl.className = 'pulse-label';
-    lbl.value = item.label || '';
+    lbl.value = fieldName;
     lbl.placeholder = 'Название (например: Прогноз)';
     lbl.oninput = () => {
-      item.label = lbl.value;
+      const old = pulseFields[idx];
+      const nv = lbl.value;
+      pulseFields[idx] = nv;
+      Object.keys(dailyPulse).forEach(ds => {
+        (dailyPulse[ds] || []).forEach(it => {
+          if (it.label === old) it.label = nv;
+        });
+      });
+      if (item) item.label = nv;
       save();
     };
 
     const plan = document.createElement('input');
     plan.type = 'text';
     plan.className = 'pulse-plan';
-    plan.value = item.plan || '';
+    plan.value = item ? (item.plan || '') : '';
     plan.placeholder = 'план';
     plan.title = 'План';
     plan.oninput = () => {
-      item.plan = plan.value;
-      save();
+      if (item) { item.plan = plan.value; save(); }
     };
 
     const sep = document.createElement('span');
@@ -2414,22 +2418,23 @@ function renderPulse() {
     const fact = document.createElement('input');
     fact.type = 'text';
     fact.className = 'pulse-fact';
-    fact.value = item.fact || '';
+    fact.value = item ? (item.fact || '') : '';
     fact.placeholder = 'факт';
     fact.title = 'Факт';
     fact.oninput = () => {
-      item.fact = fact.value;
-      save();
+      if (item) { item.fact = fact.value; save(); }
     };
 
     const del = document.createElement('button');
     del.className = 'pulse-del';
     del.textContent = '🗑';
-    del.title = 'Удалить поле';
+    del.title = 'Удалить поле (из всех дней)';
     del.onclick = () => {
-      if (!confirm('Удалить поле «' + (item.label || '(без названия)') + '»?')) return;
-      const ds = todayInput();
-      dailyPulse[ds].splice(idx, 1);
+      if (!confirm('Удалить поле «' + (fieldName || '(без названия)') + '» из всех дней?')) return;
+      pulseFields.splice(idx, 1);
+      Object.keys(dailyPulse).forEach(ds => {
+        dailyPulse[ds] = (dailyPulse[ds] || []).filter(it => (it.label || '').trim() !== fieldName);
+      });
       save();
       renderPulse();
     };
@@ -2445,8 +2450,9 @@ function renderPulse() {
 
 document.getElementById('pulseAddBtn').onclick = () => {
   const dateStr = todayInput();
-  if (!dailyPulse[dateStr]) dailyPulse[dateStr] = [];
-  dailyPulse[dateStr].push({ label: '', plan: '', fact: '' });
+  pulseFieldsEnsure();
+  pulseFields.push('');
+  pulseSyncDay(dateStr);
   save();
   renderPulse();
   setTimeout(() => {
@@ -2467,7 +2473,7 @@ document.getElementById('pulseCopyBtn').onclick = async () => {
     return;
   }
   const text = items
-    .filter(it => it.label || it.plan || it.fact)
+    .filter(it => (it.label || '').trim())
     .map(it => {
       const plan = it.plan || '0';
       const fact = it.fact || '0';
@@ -4316,7 +4322,7 @@ function buildReportModel(dateStr, kmData) {
   const todayTasks = activeTasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), new Date(dateStr + 'T00:00:00')));
   const planToday = activeTasks.filter(t => t.deadline && t.deadline >= dayStartMs && t.deadline < dayEndMs);
 
-  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
+  const pulseItems = (dailyPulse[dateStr] || []).filter(it => (it.plan || '').trim() || (it.fact || '').trim());
   let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
   pulseItems.forEach(it => {
     const p = parseFloat(String(it.plan || '').replace(',', '.'));
@@ -5563,7 +5569,8 @@ function sanitizeImported(data) {
     empWorkLog: asArr(data.empWorkLog),
     empAbsences: asArr(data.empAbsences),
     sessions: cleanSessions,
-    dailyPulse: asObj(data.dailyPulse)
+    dailyPulse: asObj(data.dailyPulse),
+    pulseFields: Array.isArray(data.pulseFields) ? data.pulseFields : null
   };
 }
 document.getElementById('importFile').onchange = (e) => {
@@ -5584,6 +5591,7 @@ document.getElementById('importFile').onchange = (e) => {
         tasks = clean.tasks; workLog = clean.workLog; employees = clean.employees;
         empWorkLog = clean.empWorkLog; empAbsences = clean.empAbsences;
         sessions = clean.sessions; dailyPulse = clean.dailyPulse;
+        pulseFields = clean.pulseFields;
         activeEmpTimer = null; activeTimer = null;
         flushSave();
         render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory();
@@ -5627,6 +5635,7 @@ function applyRemote(remote) {
   tasks = clean.tasks; workLog = clean.workLog; employees = clean.employees;
   empWorkLog = clean.empWorkLog; empAbsences = clean.empAbsences;
   sessions = clean.sessions; dailyPulse = clean.dailyPulse;
+  pulseFields = clean.pulseFields;
   activeEmpTimer = null; activeTimer = null;
   flushSave();
   render(); renderWork(); renderPulse(); renderTeam(); renderSessionsHistory();
