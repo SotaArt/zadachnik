@@ -1011,6 +1011,19 @@
   .km-alarm { background: var(--surface-2); border: 1px solid var(--amber);
     border-radius: var(--r-lg); box-shadow: var(--sh-lg); }
 
+  /* v39: время закрытия / просрочка / статус КМ */
+  .km-chk-time { font-size: 11px; color: var(--green); font-family: var(--mono); white-space: nowrap; }
+  .km-chk-time.late { color: var(--red); font-weight: 700; }
+  .km-item.late { border-left: 3px solid var(--red); padding-left: 8px; background: rgba(251,113,133,.06); }
+  .km-chk-late-note { font-size: 11px; color: var(--red); white-space: nowrap; }
+  .km-rem-repeat { font-size: 11px; color: var(--purple); white-space: nowrap; }
+  .km-status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .km-status-badge.sick { background: rgba(251,113,133,.18); color: #fca5a5; }
+  .km-status-badge.vac { background: rgba(96,165,250,.18); color: #93c5fd; }
+  .km-status-select { padding: 4px 8px; font-size: 12px; border-radius: 8px; }
+  .km-away-note { background: rgba(251,113,133,.1); border: 1px solid rgba(251,113,133,.35);
+    color: #fecaca; border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+
   /* --- Адаптив: ничего не выходит за экран --- */
   @media (max-width: 640px) {
     body { padding: 14px; }
@@ -1516,7 +1529,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 38,
+    version: 39,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -1752,7 +1765,8 @@ function renderTask(t, now) {
     const s = document.createElement('span'); s.className = 'dist-info';
     s.textContent = '📤 ' + (dist.names || '').split(', ').map(n => {
       const rep = (dist.report || {})[n];
-      return rep && rep.done ? ('✅ ' + n + (rep.note ? ' — ' + rep.note : '')) : ('⏳ ' + n);
+      if (rep && rep.done) return ('✅ ' + n) + (rep.late ? ' ⚠ закрыто не вовремя' : '') + (rep.note ? ' — ' + rep.note : '');
+      return '⏳ ' + n;
     }).join(' · ');
     meta.appendChild(s);
   }
@@ -4856,6 +4870,7 @@ newText.focus();
   'use strict';
 
   const CFG_KEY = 'tasker_km_cfg';
+  const KM_SESSION_KEY = 'tasker_km_session';
   const KM_DESC = 'Задачник КМ';
   const META_FILE = '_meta.json';
   const REM_FILE = '_reminders.json';
@@ -4876,6 +4891,7 @@ newText.focus();
     name: null,
     pin: null,
     pinHash: null,
+    status: 'work',
     doc: null,
     roster: [],
     adminRows: [],
@@ -4888,6 +4904,8 @@ newText.focus();
     pagehideBound: false,
     _remoteChecklist: null,
     _adminTasks: undefined,
+    _seenTasks: null,
+    _seenRems: null,
     _callMark: null
   };
   window.__KM = KM;
@@ -4941,6 +4959,13 @@ newText.focus();
     if (p.g && p.t) { KM.cfg.gistId = p.g; KM.cfg.token = p.t; cfgSave(); }
   }
   function cfgSave() { try { localStorage.setItem(CFG_KEY, JSON.stringify(KM.cfg)); } catch (e) {} }
+  function kmSessionSave() {
+    try { localStorage.setItem(KM_SESSION_KEY, JSON.stringify({ kmId: KM.kmId, name: KM.name })); } catch (e) {}
+  }
+  function kmSessionLoad() {
+    try { return JSON.parse(localStorage.getItem(KM_SESSION_KEY) || 'null'); } catch (e) { return null; }
+  }
+  function kmSessionClear() { try { localStorage.removeItem(KM_SESSION_KEY); } catch (e) {} }
   function cfgReady() { return !!(KM.cfg.token && KM.cfg.gistId); }
 
   function parseHash() {
@@ -5232,8 +5257,10 @@ newText.focus();
       KM.name = rec.name;
       KM.pin = rec.pin || pin;
       KM.pinHash = rec.pinHash || h;
+      KM.status = rec.status || 'work';
       KM.doc = normDoc(rec.doc);
       KM.doc.day = today();
+      kmSessionSave();
       requestNotifPermission();
       kmStartHeartbeat();
       kmFetchReminders();
@@ -5242,9 +5269,32 @@ newText.focus();
     } catch (e) { err.textContent = e.message; }
   }
 
+  async function kmAutoLogin(kmId) {
+    try {
+      if (!cfgReady()) return false;
+      const rec = await kmGet(kmId);
+      if (!rec) return false;
+      KM.kmId = kmId;
+      KM.name = rec.name;
+      KM.pin = rec.pin || '';
+      KM.pinHash = rec.pinHash || null;
+      KM.status = rec.status || 'work';
+      KM.doc = normDoc(rec.doc);
+      KM.doc.day = today();
+      KM.roster = await rosterList().catch(() => []);
+      requestNotifPermission();
+      kmStartHeartbeat();
+      kmFetchReminders();
+      kmShowSheet();
+      kmPushSoon();
+      return true;
+    } catch (e) { return false; }
+  }
+
   function kmLogout() {
     if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('logout');
     kmStopHeartbeat();
+    kmSessionClear();
     KM.kmId = null; KM.name = null; KM.pin = null; KM.pinHash = null; KM.doc = null;
     kmShowLogin();
   }
@@ -5288,6 +5338,7 @@ newText.focus();
       '</div>' +
       '<div class="km-card">' +
         '<div class="km-card-head"><span>✅ Чеклист дня</span><span class="km-caret">▾</span></div>' +
+        '<div id="kmAwayBox"></div>' +
         '<div class="km-row"><input id="kmChkText" class="km-input" placeholder="Добавить свою задачу…"><button class="km-btn" id="kmChkAdd">+</button></div>' +
         '<div id="kmChkList" class="km-list"></div>' +
       '</div>' +
@@ -5422,23 +5473,67 @@ newText.focus();
       '<span>Звонков <b>' + todaysCalls().length + '</b></span>';
   }
 
+  function kmChkTime(it) {
+    if (it.by === 'admin' && it.due) return it.due;
+    if (it.due) return it.due;
+    return null;
+  }
+  function kmTimeStr(minutes) {
+    if (minutes == null) return '09:00';
+    const h = Math.floor(minutes / 60), m = minutes % 60;
+    return pad2(h) + ':' + pad2(m);
+  }
+  function kmChkSortKey(it) {
+    const t = kmChkTime(it);
+    if (t) { const p = String(t).split(':'); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); }
+    return 9 * 60;
+  }
+  function kmIsLate(it) {
+    if (!it.done || !it.doneTs) return false;
+    if (it.by !== 'admin' || !it.due) return false;
+    const p = String(it.due).split(':');
+    const dueMin = (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+    const dd = new Date(it.doneTs);
+    const doneMin = dd.getHours() * 60 + dd.getMinutes();
+    return doneMin > dueMin;
+  }
+
   function renderSheet() {
     if (!KM.doc) return;
+    const away = kmAway();
+    const awayNote = away
+      ? '<div class="km-away-note">' + (KM.status === 'sick' ? '🤒 Вы на больничном' : '🌴 Вы в отпуске') + ' — уведомления и будильники отключены.</div>'
+      : '';
+    if (el('kmAwayBox')) el('kmAwayBox').innerHTML = awayNote;
     const chk = el('kmChkList');
-    if (chk) chk.innerHTML = KM.doc.checklist.length ? KM.doc.checklist.map(it => {
-      const isAdmin = it.by === 'admin';
-      const meta = (it.due ? '<span class="km-task-due">до ' + esc(it.due) + '</span>' : '') +
-        (it.repeat ? '<span class="km-task-rep">ежедневно</span>' : '');
-      const noteInput = isAdmin
-        ? '<input class="km-input km-chk-note" data-chknote="' + it.id + '" value="' + esc(it.note || '') + '" placeholder="' + (it.done ? 'Комментарий к выполнению…' : 'Комментарий…') + '">'
-        : '';
-      return '<div class="km-item' + (it.done ? ' done' : '') + '">' +
-        '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '>' +
-        '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + (meta ? ' ' + meta : '') + '</span></label>' +
-        (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '" data-text="' + esc(it.text) + '">✕</button>') +
-        noteInput +
-      '</div>';
-    }).join('') : '<div class="km-muted">Пока пусто</div>';
+    if (chk) {
+      const items = KM.doc.checklist.slice().sort((a, b) => {
+        const ka = kmChkSortKey(a), kb = kmChkSortKey(b);
+        if (ka !== kb) return ka - kb;
+        return (a.ts || 0) - (b.ts || 0);
+      });
+      chk.innerHTML = items.length ? items.map(it => {
+        const isAdmin = it.by === 'admin';
+        const late = kmIsLate(it);
+        const meta = (it.due ? '<span class="km-task-due">до ' + esc(it.due) + '</span>' : '') +
+          (it.repeat ? '<span class="km-task-rep">ежедневно</span>' : '');
+        const timeLbl = it.done && it.doneTs
+          ? '<span class="km-chk-time' + (late ? ' late' : '') + '">✓ ' + hhmm(it.doneTs) + '</span>'
+          : '';
+        const lateNote = late ? '<span class="km-chk-late-note">закрыто не вовремя</span>' : '';
+        const noteInput = isAdmin
+          ? '<input class="km-input km-chk-note" data-chknote="' + it.id + '" value="' + esc(it.note || '') + '" placeholder="' + (it.done ? 'Комментарий к выполнению…' : 'Комментарий…') + '">'
+          : '';
+        return '<div class="km-item' + (it.done ? ' done' : '') + (late ? ' late' : '') + '">' +
+          '<label><input type="checkbox" data-chk="' + it.id + '"' + (it.done ? ' checked' : '') + '>' +
+          '<span>' + (isAdmin ? '📌 ' : '') + esc(it.text) + (meta ? ' ' + meta : '') + '</span></label>' +
+          timeLbl +
+          lateNote +
+          (isAdmin ? '' : '<button class="km-del" data-chkdel="' + it.id + '" data-text="' + esc(it.text) + '">✕</button>') +
+          noteInput +
+        '</div>';
+      }).join('') : '<div class="km-muted">Пока пусто</div>';
+    }
     const en = el('kmEntries');
     const todays = KM.doc.entries.filter(x => x.date === today()).sort((a, b) => b.startTs - a.startTs);
     if (en) en.innerHTML = todays.length ? todays.map(x =>
@@ -5461,10 +5556,11 @@ newText.focus();
     if (!KM.reminders.length) { box.innerHTML = '<div class="km-muted">Нет напоминаний</div>'; return; }
     const fired = KM.doc ? (KM.doc.fired || []) : [];
     box.innerHTML = KM.reminders.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r => {
-      const isDone = fired.includes(r.id + '@' + today());
+      const isDone = !r.repeat && fired.includes(r.id + '@' + today());
       return '<div class="km-rem-item">' +
         '<span class="km-rem-time">' + esc(r.time) + '</span>' +
-        '<span class="km-rem-text' + (isDone ? '' : '') + '">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        (r.repeat ? '<span class="km-rem-repeat">↻ каждый день</span>' : '<span class="km-rem-repeat">разово</span>') +
         '<span class="km-rem-who">' + (isDone ? '✓ выполнено' : 'не отмечено') + '</span>' +
       '</div>';
     }).join('');
@@ -5631,6 +5727,8 @@ newText.focus();
     try {
       await kmFetchReminders();
       await kmFetchTasks();
+      const _r = await kmGet(KM.kmId).catch(() => null);
+      if (_r && _r.status) KM.status = _r.status;
       await kmPushNow();
       const n = el('kmNet'); if (n) n.textContent = 'синхр. ' + new Date().toLocaleTimeString('ru-RU');
       checkReminders();
@@ -5656,8 +5754,10 @@ newText.focus();
       try { at = await tasksGet(); } catch (e) {}
       KM._adminTasks = at;
       if (at === null) KM._adminTasks = [];
+      kmNoticeNewTasks();
       kmMergeChecklist();
-      await kmPut({ id: KM.kmId, name: KM.name, pin: KM.pin, pinHash: KM.pinHash, doc: KM.doc });
+      const base = rec || {};
+      await kmPut(Object.assign({}, base, { id: KM.kmId, name: KM.name, pin: KM.pin, pinHash: KM.pinHash, status: base.status || KM.status || 'work', doc: KM.doc }));
       renderSheet();
       await kmReportTasks();
     } catch (e) {}
@@ -5677,11 +5777,13 @@ newText.focus();
         const rep = t.kmReport || (t.kmReport = {});
         const mine = rep[KM.kmId] || (rep[KM.kmId] = {});
         const doneDay = it.done ? (it.doneDay || today()) : null;
-        if (mine.done !== !!it.done || mine.doneDay !== doneDay || (mine.note || '') !== (it.note || '')) {
+        const late = kmIsLate(it);
+        if (mine.done !== !!it.done || mine.doneDay !== doneDay || (mine.note || '') !== (it.note || '') || !!mine.late !== late) {
           mine.done = !!it.done;
           mine.doneDay = doneDay;
           mine.doneTs = it.doneTs || null;
           mine.note = it.note || '';
+          mine.late = late;
           mine.ts = Date.now();
           changed = true;
         }
@@ -5694,6 +5796,16 @@ newText.focus();
     if (!t) return false;
     if (t.kmIds === 'all') return true;
     return Array.isArray(t.kmIds) && t.kmIds.indexOf(kmId) !== -1;
+  }
+  function kmNoticeNewTasks() {
+    const ids = (KM._adminTasks || []).filter(t => taskAssignedTo(t, KM.kmId)).map(t => String(t.id));
+    if (KM._seenTasks === null) { KM._seenTasks = ids; return; }
+    const prev = KM._seenTasks;
+    const added = ids.filter(x => prev.indexOf(x) === -1);
+    KM._seenTasks = ids;
+    if (!added.length) return;
+    const first = (KM._adminTasks || []).find(t => String(t.id) === added[0]);
+    if (first) notifyNew('📌 Новая задача', first.text);
   }
 
   /* ============ распределение задач из «Задачи» на КМ ============ */
@@ -5799,7 +5911,7 @@ newText.focus();
         const ids = rec.kmIds === 'all' ? Object.keys(rec.kmReport || {}) : (Array.isArray(rec.kmIds) ? rec.kmIds : []);
         ids.forEach(id => {
           const r = (rec.kmReport || {})[id];
-          if (r) report[kmNameById(id)] = { done: !!r.done, note: r.note || '' };
+          if (r) report[kmNameById(id)] = { done: !!r.done, note: r.note || '', late: !!r.late, doneTs: r.doneTs || null };
         });
         const old = JSON.stringify(map[key].report || {});
         map[key].report = report;
@@ -5823,6 +5935,7 @@ newText.focus();
       const list = await tasksGet();
       KM.adminTasks = Array.isArray(list) ? list : [];
       KM._adminTasks = KM.adminTasks;
+      kmNoticeNewTasks();
       if (KM.doc) { kmMergeChecklist(); renderSheet(); }
     } catch (e) {}
   }
@@ -5832,13 +5945,26 @@ newText.focus();
       const list = await remindersGet();
       const mine = list.filter(r => r.kmIds === 'all' || (Array.isArray(r.kmIds) && r.kmIds.includes(KM.kmId)));
       KM.reminders = mine;
+      kmNoticeNewRems(mine);
       renderRemView();
     } catch (e) {}
   }
+  function kmNoticeNewRems(list) {
+    const ids = (list || []).map(r => String(r.id));
+    if (KM._seenRems === null) { KM._seenRems = ids; return; }
+    const prev = KM._seenRems;
+    const added = ids.filter(x => prev.indexOf(x) === -1);
+    KM._seenRems = ids;
+    if (!added.length) return;
+    const first = (list || []).find(r => String(r.id) === added[0]);
+    if (first) notifyNew('⏰ Новое напоминание', first.time + ' — ' + first.text);
+  }
+  function kmAway() { return KM.status === 'sick' || KM.status === 'vacation'; }
   function checkReminders() {
-    if (!KM.doc || !KM.reminders.length) return;
+    if (!KM.doc) return;
+    if (kmAway()) return;
     const now = Date.now();
-    const fired = KM.doc.fired;
+    const fired = KM.doc.fired || (KM.doc.fired = []);
     KM.reminders.forEach(r => {
       if (!r || !r.time) return;
       const parts = String(r.time).split(':');
@@ -5847,34 +5973,62 @@ newText.focus();
       const sched = new Date(); sched.setHours(h, m, 0, 0);
       if (now < sched.getTime()) return;
       if (now - sched.getTime() > ALARM_GRACE_MS) return;
-      const key = r.id + '@' + today();
+      const key = r.repeat ? (r.id + '@' + today()) : (r.id + '@once');
       if (fired.indexOf(key) !== -1) return;
       fired.push(key);
       logEvent('alarm', r.text);
-      showAlarm(r.text);
+      showAlarm(r.text, '⏰ Напоминание');
       beep();
       kmPushSoon();
       renderRemView();
     });
+    checkTaskDueAlarms(now, fired);
   }
-  function showAlarm(text) {
+  function checkTaskDueAlarms(now, fired) {
+    const LEAD = 20 * 60 * 1000;
+    const tasks = (KM._adminTasks || []).filter(t => taskAssignedTo(t, KM.kmId) && t.due && !taskDoneByMe(t));
+    tasks.forEach(t => {
+      const parts = String(t.due).split(':');
+      const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+      if (isNaN(h) || isNaN(m)) return;
+      const sched = new Date(); sched.setHours(h, m, 0, 0);
+      const fireAt = sched.getTime() - LEAD;
+      if (now < fireAt) return;
+      if (now - fireAt > ALARM_GRACE_MS) return;
+      const key = 'task_' + t.id + '@' + today();
+      if (fired.indexOf(key) !== -1) return;
+      fired.push(key);
+      const txt = 'Через 20 минут дедлайн: ' + t.text;
+      logEvent('alarm', txt);
+      showAlarm(txt, '⏳ Скоро дедлайн');
+      beep();
+      kmPushSoon();
+    });
+  }
+  function taskDoneByMe(t) {
+    if (!KM.doc) return false;
+    const it = KM.doc.checklist.find(x => x.id === t.id);
+    return !!(it && it.done);
+  }
+  function showAlarm(text, title) {
     const old = document.querySelector('.km-alarm');
     if (old) old.remove();
     const w = ce('div', 'km-alarm');
-    w.innerHTML = '<h4>⏰ Напоминание</h4><p>' + esc(text) + '</p><button id="kmAlarmOk">Хорошо</button>';
+    w.innerHTML = '<h4>' + esc(title || '⏰ Напоминание') + '</h4><p>' + esc(text) + '</p><button id="kmAlarmOk">Хорошо</button>';
     document.body.appendChild(w);
     w.querySelector('#kmAlarmOk').onclick = () => w.remove();
     try {
       if (window.Notification && Notification.permission === 'granted') {
-        new Notification('⏰ Задачник', { body: text });
+        new Notification(title || '⏰ Задачник', { body: text });
       }
     } catch (e) {}
   }
-  function beep() {
+  function beep(freq) {
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.type = 'sine'; o.frequency.value = 880;
+      o.type = 'sine'; o.frequency.value = freq || 880;
       o.connect(g); g.connect(audioCtx.destination);
       const t = audioCtx.currentTime;
       g.gain.setValueAtTime(0.0001, t);
@@ -5882,6 +6036,16 @@ newText.focus();
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
       o.start(t); o.stop(t + 0.65);
     } catch (e) {}
+  }
+  function beepNew() { beep(660); setTimeout(() => beep(990), 180); }
+  function notifyNew(kind, text) {
+    if (kmAway()) return;
+    try {
+      if (window.Notification && Notification.permission === 'granted') {
+        new Notification(kind, { body: text, tag: 'tasker-new' });
+      }
+    } catch (e) {}
+    beepNew();
   }
   function requestNotifPermission() {
     try {
@@ -5932,6 +6096,7 @@ newText.focus();
         '<div class="km-row">' +
           '<input id="kmRemText" class="km-input" placeholder="Текст напоминания">' +
           '<input id="kmRemTime" type="time" class="km-input km-due" value="18:00">' +
+          '<label class="km-muted" style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="kmRemRepeat"> каждый день</label>' +
         '</div>' +
         '<div class="km-row" style="margin-top:8px">' +
           '<div class="km-targets" id="kmRemTargets" style="flex:1"></div>' +
@@ -6141,6 +6306,7 @@ newText.focus();
   async function adminAddReminder() {
     const time = el('kmRemTime').value;
     const text = el('kmRemText').value.trim();
+    const repeat = !!(el('kmRemRepeat') && el('kmRemRepeat').checked);
     const sel = readTargets('kmRemTargets');
     const msg = el('kmRemMsg');
     if (!time || !text) { msg.textContent = 'Укажите время и текст'; return; }
@@ -6148,10 +6314,11 @@ newText.focus();
     if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
     try {
       const list = await remindersGet();
-      list.push({ id: uid(), time: time, text: text, kmIds: sel, created: Date.now() });
+      list.push({ id: uid(), time: time, text: text, kmIds: sel, repeat: repeat, created: Date.now() });
       await remindersPut(list);
       el('kmRemText').value = '';
-      msg.textContent = 'Добавлено: ' + time + ' — ' + text + ' → ' + targetNames(sel);
+      if (el('kmRemRepeat')) el('kmRemRepeat').checked = false;
+      msg.textContent = 'Добавлено: ' + time + ' — ' + text + (repeat ? ' (каждый день)' : ' (разово)') + ' → ' + targetNames(sel);
       kmRenderAdmin(true);
     } catch (e) { msg.textContent = e.message; }
   }
@@ -6161,6 +6328,17 @@ newText.focus();
     try {
       const list = await remindersGet();
       await remindersPut(list.filter(r => r.id !== remId));
+      kmRenderAdmin(true);
+    } catch (e) { alert(e.message); }
+  }
+
+  async function adminSetStatus(kmId, status) {
+    if (['work', 'sick', 'vacation'].indexOf(status) === -1) return;
+    try {
+      const rec = await kmGet(kmId);
+      if (!rec) return;
+      rec.status = status;
+      await kmPut(rec);
       kmRenderAdmin(true);
     } catch (e) { alert(e.message); }
   }
@@ -6212,8 +6390,15 @@ newText.focus();
       if (et) { applyTargets('kmTaskTargets', et.kmIds); updateMsLabel('kmTaskTargets'); }
     }
 
-    el('kmTaskAdminList').innerHTML = tks.length ? tks.map(r =>
+    const tksSorted = tks.slice().sort((a, b) => {
+      const ka = a.due ? (String(a.due)) : '09:00';
+      const kb = b.due ? (String(b.due)) : '09:00';
+      if (ka !== kb) return ka.localeCompare(kb);
+      return (a.created || 0) - (b.created || 0);
+    });
+    el('kmTaskAdminList').innerHTML = tksSorted.length ? tksSorted.map(r =>
       '<div class="km-task-item' + (r.id === KM._editTaskId ? ' km-task-editing' : '') + '">' +
+        '<span class="km-rem-time">' + esc(r.due || '09:00') + '</span>' +
         '<span class="km-rem-text">' + esc(r.text) + '</span>' +
         (r.due ? '<span class="km-task-due">до ' + esc(r.due) + '</span>' : '') +
         (r.repeat ? '<span class="km-task-rep">ежедневно</span>' : '') +
@@ -6226,6 +6411,7 @@ newText.focus();
       '<div class="km-rem-item">' +
         '<span class="km-rem-time">' + esc(r.time) + '</span>' +
         '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-repeat">' + (r.repeat ? '↻ каждый день' : 'разово') + '</span>' +
         '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
         '<button class="km-icon" data-editrem="' + esc(r.id) + '" title="Изменить">✏️</button>' +
         '<button class="km-del" data-delrem="' + esc(r.id) + '">✕</button>' +
@@ -6241,11 +6427,20 @@ newText.focus();
       const chkDone = doc.checklist.filter(x => x.done).length;
       const lastEv = doc.events[0];
       const link = kmLink(r.id);
+      const st = r.status || 'work';
+      const stBadge = st === 'sick' ? '<span class="km-status-badge sick">🤒 больничный</span>'
+        : st === 'vacation' ? '<span class="km-status-badge vac">🌴 отпуск</span>' : '';
       return '<div class="km-acard">' +
         '<div class="km-acard-head">' +
           '<span style="color:' + (online ? '#22c55e' : '#71717a') + '">●</span>' +
           '<b>' + esc(r.name) + '</b>' +
           (r.pin ? '<span class="km-pin-lbl">ПИН</span><span class="km-pin">' + esc(r.pin) + '</span>' : '') +
+          stBadge +
+          '<select class="km-input km-status-select" data-kmstatus="' + esc(r.id) + '" title="Статус КМ — уведомления не приходят в больничный/отпуск">' +
+            '<option value="work"' + (st === 'work' ? ' selected' : '') + '>на работе</option>' +
+            '<option value="sick"' + (st === 'sick' ? ' selected' : '') + '>больничный</option>' +
+            '<option value="vacation"' + (st === 'vacation' ? ' selected' : '') + '>отпуск</option>' +
+          '</select>' +
           (running ? '<span class="km-badge run">⏱ ' + fmtClock(now - doc.timer.startTs) + '</span>' : '') +
           (online ? '<span class="km-badge on">онлайн</span>' : '<span class="km-badge off">офлайн</span>') +
         '</div>' +
@@ -6280,6 +6475,8 @@ newText.focus();
     } else if (t && t.classList && t.classList.contains('tg-one')) {
       const wrap = t.closest ? t.closest('.km-targets') : null;
       if (wrap && wrap.id) updateMsLabel(wrap.id);
+    } else if (t && t.getAttribute && t.getAttribute('data-kmstatus')) {
+      adminSetStatus(t.getAttribute('data-kmstatus'), t.value);
     }
   });
 
@@ -6348,7 +6545,7 @@ newText.focus();
     w.innerHTML =
       '<div class="km-modal km-modal-wide">' +
         '<h3>' + esc(r.name) + (r.pin ? ' <span class="km-pin">ПИН ' + esc(r.pin) + '</span>' : '') + '</h3>' +
-        '<div class="km-view-sec"><b>Чеклист дня</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + (x.by === 'admin' ? '📌 ' : '') + esc(x.text) + (x.due ? ' · <span class="km-task-due">до ' + esc(x.due) + '</span>' : '') + (x.repeat ? ' · <span class="km-task-rep">ежедневно</span>' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
+        '<div class="km-view-sec"><b>Чеклист дня</b><br>' + (doc.checklist.map(x => (x.done ? '☑ ' : '☐ ') + (x.by === 'admin' ? '📌 ' : '') + esc(x.text) + (x.due ? ' · <span class="km-task-due">до ' + esc(x.due) + '</span>' : '') + (x.repeat ? ' · <span class="km-task-rep">ежедневно</span>' : '') + (x.done && x.doneTs ? ' · <span class="km-chk-time' + (kmIsLate(x) ? ' late' : '') + '">✓ ' + hhmm(x.doneTs) + '</span>' : '') + (kmIsLate(x) ? ' · <span class="km-chk-late-note">закрыто не вовремя</span>' : '')).join('<br>') || '<span class="km-muted">—</span>') + '</div>' +
         '<div class="km-view-sec"><b>📞 Звонки за день</b> <span class="km-muted">' + calls.length + '</span><br>' +
           (calls.map(c => '<div class="km-view-call">' + (c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪') + ' ' +
             esc(c.date) + ' ' + hhmm(c.startTs) + '–' + hhmm(c.endTs) + ' · ' + fmtDur(c.endTs - c.startTs) +
@@ -6412,6 +6609,15 @@ newText.focus();
       kmRoot.style.display = 'block';
       const p = parseHash();
       kmShowLogin(p.id || '');
+      return;
+    }
+    const sess = kmSessionLoad();
+    if (sess && sess.kmId && cfgReady()) {
+      hideAdminApp();
+      buildShell();
+      kmRoot.style.display = 'block';
+      kmShowLogin(sess.kmId || '');
+      kmAutoLogin(sess.kmId);
       return;
     }
     if (cfgReady()) {
