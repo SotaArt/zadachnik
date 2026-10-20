@@ -1177,8 +1177,7 @@
   <div class="tabs" id="mainTabs">
     <button data-tab="tasks" class="active"><span class="tab-ico">📋</span><span class="tab-lbl">Задачи</span></button>
     <button data-tab="time"><span class="tab-ico">⏱</span><span class="tab-lbl">Время</span></button>
-    <button data-tab="team"><span class="tab-ico">👥</span><span class="tab-lbl">Сотрудники</span></button>
-    <button data-tab="pulse"><span class="tab-ico">📈</span><span class="tab-lbl">Срез</span></button>
+    <button data-tab="team"><span class="tab-ico">👥</span><span class="tab-lbl">С КМ</span></button>
     <button data-tab="report"><span class="tab-ico">📊</span><span class="tab-lbl">Отчёт</span></button>
     <button data-tab="more"><span class="tab-ico">⚙</span><span class="tab-lbl">Ещё</span></button>
   </div>
@@ -1235,6 +1234,20 @@
     <button class="stats-toggle" id="statsToggle">📊 Показать статистику</button>
     <div class="stats" id="statsBox"></div>
     <div id="list"></div>
+
+    <div class="pulse-box" id="pulseBox" style="margin-top:16px">
+      <div class="pulse-header">
+        <h3>📊 Срез дня <span id="pulseDateLabel" style="color:#a1a1aa;font-weight:400;font-size:13px"></span></h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="pulseAddBtn" style="background:#6366f1;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px">+ Поле</button>
+          <button id="pulseCopyBtn" style="background:#22c55e;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">📋 Копировать</button>
+        </div>
+      </div>
+      <div id="pulseList"></div>
+      <div class="form-hint" id="pulseHint" style="display:none">
+        Пока пусто — нажми <b>+ Поле</b>, чтобы добавить первую строку
+      </div>
+    </div>
   </div>
 
   <div class="tab-panel" id="panel-time">
@@ -1295,22 +1308,6 @@
     </div>
 
     <div id="timeList"></div>
-  </div>
-
-  <div class="tab-panel" id="panel-pulse">
-    <div class="pulse-box" id="pulseBox">
-      <div class="pulse-header">
-        <h3>📊 Срез дня <span id="pulseDateLabel" style="color:#a1a1aa;font-weight:400;font-size:13px"></span></h3>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button id="pulseAddBtn" style="background:#6366f1;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px">+ Поле</button>
-          <button id="pulseCopyBtn" style="background:#22c55e;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">📋 Копировать</button>
-        </div>
-      </div>
-      <div id="pulseList"></div>
-      <div class="form-hint" id="pulseHint" style="display:none">
-        Пока пусто — нажми <b>+ Поле</b>, чтобы добавить первую строку
-      </div>
-    </div>
   </div>
 
   <div class="tab-panel" id="panel-report">
@@ -1655,7 +1652,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 47,
+    version: 48,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -1712,9 +1709,9 @@ document.querySelectorAll('.tabs button').forEach(btn => {
     btn.classList.add('active');
     const panel = document.getElementById('panel-' + tab);
     if (panel) panel.classList.add('active');
-    if (tab === 'time') { renderWork(); renderPulse(); updateTimerLocks(); }
+    if (tab === 'tasks') { renderPulse(); }
+    if (tab === 'time') { renderWork(); updateTimerLocks(); }
     if (tab === 'team') { renderTeam(); renderSessionsHistory(); updateTimerLocks(); }
-    if (tab === 'pulse') { renderPulse(); }
     if (tab === 'report') refreshDailyReportPanel();
     updateTopButtons();
   };
@@ -7785,7 +7782,9 @@ newText.focus();
     if (!tabs || tabs.querySelector('[data-tab="km"]')) return;
     const b = ce('button', '', '<span class="tab-ico">🛰</span><span class="tab-lbl">КМ</span>');
     b.setAttribute('data-tab', 'km');
-    tabs.appendChild(b);
+    const reportBtn = tabs.querySelector('[data-tab="report"]');
+    if (reportBtn) tabs.insertBefore(b, reportBtn);
+    else tabs.appendChild(b);
   }
   function hookAdminTab() {
     const btn = document.querySelector('.tabs [data-tab="km"]');
