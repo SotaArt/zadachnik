@@ -1321,6 +1321,7 @@
           <button id="reportShowBtn" style="background:#22c55e;color:white;border:none;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500">Показать</button>
         </div>
       </div>
+      <div id="reportSummary" style="margin:4px 0 10px"></div>
       <textarea id="reportText" placeholder="Нажми «Показать», чтобы сформировать отчёт за выбранную дату"
         style="width:100%;height:420px;padding:12px;border-radius:8px;border:1px solid #3f3f56;background:#1e1e2e;color:#e4e4e7;font-family:ui-monospace,monospace;font-size:12.5px;resize:vertical"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -1648,7 +1649,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 44,
+    version: 45,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4064,7 +4065,8 @@ function showSessionReport(s) {
 }
 
 /* ============================================================
-   ИТОГ ДНЯ (v44 — детальный отчёт: планы, хронология, листы КМ)
+   ИТОГ ДНЯ (v45 — управляемая сводка: KPI, «требует внимания»,
+   таблица команды, детали, хронология интервалами, контроль данных)
 ============================================================ */
 function kmDataEmpty() { return { ok: false, reason: '', records: [], tasks: [] }; }
 function kmRecList(kmData) { return (kmData && Array.isArray(kmData.records)) ? kmData.records : []; }
@@ -4082,6 +4084,15 @@ function chkIsLate(it) {
 }
 const REPEAT_LBL = { daily: 'ежедневно', weekdays: 'по будням', weekly: 'еженедельно', monthly: 'ежемесячно' };
 const KM_EV_LBL = { start: 'старт задачи', stop: 'стоп', bg: 'свернул вкладку', idle: 'бездействие', offline: 'закрыл приложение', logout: 'выход', alarm: 'напоминание' };
+
+/* Раздельные статусы: состояние задачи и соблюдение срока */
+function classifyDue(done, doneTs, deadlineMs) {
+  if (!deadlineMs) return 'NO_DEADLINE';
+  if (done) return (doneTs && doneTs > deadlineMs) ? 'LATE' : 'ON_TIME';
+  return deadlineMs < Date.now() ? 'OVERDUE' : 'NOT_DUE';
+}
+const DUE_GLYPH = { ON_TIME: '✅', LATE: '⚠️', OVERDUE: '🔴', NOT_DUE: '⬜', NO_DEADLINE: '▫️' };
+const DUE_RU = { ON_TIME: 'в срок', LATE: 'не в срок', OVERDUE: 'просрочено', NOT_DUE: 'срок не наступил', NO_DEADLINE: 'без срока' };
 
 function osOneLine(text) {
   if (!text) return '';
@@ -4103,7 +4114,30 @@ function kmDayHasData(rec, dateStr) {
   return false;
 }
 
-/* Единая хронология дня — всё, что было зафиксировано по времени */
+/* Склейка старт/стоп событий в один интервал (меньше строк — та же информация) */
+function mergeTimelinePairs(evs) {
+  const out = [];
+  for (let i = 0; i < evs.length; i++) {
+    const e = evs[i], n = evs[i + 1];
+    if (n && n.who === e.who && (n.ts - e.ts) < 6 * 3600000) {
+      const dur = '(' + fmtDurShort(n.ts - e.ts) + ' → ' + formatTimeShort(n.ts) + ')';
+      if (e.icon === '🎧' && n.icon === '⏹') {
+        out.push({ ts: e.ts, icon: '🎧', who: e.who, line: e.line + ' ' + dur }); i++; continue;
+      }
+      if (e.icon === '▶' && n.icon === '■') {
+        out.push({ ts: e.ts, icon: '▶■', who: e.who, line: e.line + ' ' + dur }); i++; continue;
+      }
+      if (e.icon === '📞' && n.icon === '📞' && /^(Набор|Личный набор)/.test(e.line)) {
+        const rest = n.line.replace(/^Отбой — /, '').replace(/^Личный звонок — /, 'личный — ');
+        out.push({ ts: e.ts, icon: '📞', who: e.who, line: e.line + ' ' + dur + ' — ' + rest }); i++; continue;
+      }
+    }
+    out.push(e);
+  }
+  return out;
+}
+
+/* Единая хронология дня */
 function buildDayTimeline(dateStr, kmData) {
   const r = dayRangeMs(dateStr);
   const inDay = ts => ts != null && ts >= r.start && ts < r.end;
@@ -4176,225 +4210,17 @@ function buildDayTimeline(dateStr, kmData) {
     }
   });
 
-  return evs.sort((a, b) => a.ts - b.ts);
+  return mergeTimelinePairs(evs.sort((a, b) => a.ts - b.ts));
 }
 
-function buildDailyReport(dateStr, kmData) {
-  kmData = kmData || kmDataEmpty();
+/* ---- Статистика по каждому сотруднику/КМ за день ---- */
+function computeEmpDayPairs(dateStr, kmData) {
   const r = dayRangeMs(dateStr);
-  const dayStartMs = r.start;
-  const dayEndMs = r.end;
-  const dayLabel = new Date(r.start).toLocaleDateString('ru-RU', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  });
-
-  let report = '';
-  report += `📊 ИТОГОВЫЙ ОТЧЁТ ЗА ДЕНЬ\n`;
-  report += `📅 ${dayLabel}\n`;
-  report += `Дата формирования: ${formatDate(new Date())}\n`;
-  if (kmData.ok) {
-    report += `☁ Листы КМ из облака: ${kmRecList(kmData).length} шт.` +
-      (kmData.fetchedAt ? ` (загружено ${formatTime(kmData.fetchedAt)})` : '') + `\n`;
-  } else if (kmData.reason) {
-    report += `⚠️ Листы КМ не загружены: ${kmData.reason}\n`;
-  }
-  report += `${'='.repeat(60)}\n\n`;
-
-  /* ---- СРЕЗ ДНЯ ---- */
-  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
-  if (pulseItems.length > 0) {
-    report += `📌 СРЕЗ ДНЯ (план / факт / прогноз)\n`;
-    report += `${'-'.repeat(60)}\n`;
-    pulseItems.forEach(it => {
-      const plan = it.plan || '0';
-      const fact = it.fact || '0';
-      report += `${it.label} ${plan}/${fact}\n`;
-    });
-    let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
-    pulseItems.forEach(it => {
-      const p = parseFloat(String(it.plan || '').replace(',', '.'));
-      if (!isNaN(p)) { planSum += p; hasPlan = true; }
-      const f = parseFloat(String(it.fact || '').replace(',', '.'));
-      if (!isNaN(f)) { factSum += f; hasFact = true; }
-    });
-    const pct = planSum > 0 ? Math.round(factSum / planSum * 100) : 0;
-    const diff = factSum - planSum;
-    report += `${'-'.repeat(60)}\n`;
-    report += `📊 Итого: план ${hasPlan ? planSum : '—'} / факт ${hasFact ? factSum : '—'}`;
-    if (hasPlan) report += ` — ${pct}%`;
-    if (hasPlan && hasFact) report += ` (${diff >= 0 ? '+' : ''}${diff})`;
-    report += `\n\n`;
-  }
-
-  /* ---- ПЛАНЫ И ПРОГНОЗЫ ---- */
-  const planToday = tasks.filter(t => !t.done && t.deadline && t.deadline >= dayStartMs && t.deadline < dayEndMs);
-  const distTasks = kmTaskList(kmData);
-  if (planToday.length > 0 || distTasks.length > 0) {
-    report += `📈 ПЛАНЫ И ПРОГНОЗЫ\n`;
-    report += `${'-'.repeat(60)}\n`;
-    if (planToday.length > 0) {
-      report += `📅 Мои задачи на этот день (${planToday.length}):\n`;
-      [...planToday].sort((a, b) => a.deadline - b.deadline).forEach(t => {
-        report += `    • до ${formatTimeShort(t.deadline)} — ${t.text}` +
-          (t.repeat ? ` (повтор: ${REPEAT_LBL[t.repeat] || t.repeat})` : '') + `\n`;
-      });
-      report += `\n`;
-    }
-    if (distTasks.length > 0) {
-      report += `  📋 Задачи, распределённые на КМ (${distTasks.length}):\n`;
-      const recs = kmRecList(kmData);
-      distTasks.forEach(t => {
-        report += `    ▸ [${t.due || '—'}]${t.repeat ? ' ↻' : ''} ${t.text}\n`;
-        const ids = t.kmIds === 'all' ? recs.map(x => x.id) : (Array.isArray(t.kmIds) ? t.kmIds : []);
-        if (ids.length === 0) report += `        (листы КМ не загружены)\n`;
-        ids.forEach(id => {
-          const rec = kmRecById(kmData, id);
-          const nm = rec ? rec.name : ('КМ ' + String(id).slice(0, 6));
-          const rep = (t.kmReport || {})[String(id)];
-          if (!rep) { report += `        ${nm}: ⬜ не отмечено\n`; return; }
-          let st;
-          if (rep.done) {
-            st = rep.doneDay === dateStr
-              ? '✅ выполнено' + (rep.doneTs ? ' в ' + formatTimeShort(rep.doneTs) : '')
-              : '✅ выполнено ' + (rep.doneDay || '');
-          } else {
-            st = '⏳ не выполнено';
-          }
-          if (rep.late) st += ' 🔴 не в срок';
-          report += `        ${nm}: ${st}\n`;
-          if (rep.note) report += `           💬 ${rep.note}\n`;
-        });
-      });
-      report += `\n`;
-    }
-  }
-
-  /* ---- ХРОНОЛОГИЯ ДНЯ ---- */
-  const timeline = buildDayTimeline(dateStr, kmData);
-  report += `⏱ ХРОНОЛОГИЯ ДНЯ` + (timeline.length ? ` (${timeline.length} событий)` : '') + `\n`;
-  report += `${'-'.repeat(60)}\n`;
-  if (timeline.length === 0) {
-    report += `Событий за день нет\n\n`;
-  } else {
-    const MAX_EV = 300;
-    timeline.slice(0, MAX_EV).forEach(e => {
-      const d = new Date(e.ts);
-      report += `${pad(d.getHours())}:${pad(d.getMinutes())}  ${e.icon} [${e.who}] ${e.line}\n`;
-    });
-    if (timeline.length > MAX_EV) report += `… и ещё ${timeline.length - MAX_EV} событий\n`;
-    report += `\n`;
-  }
-
-  /* ---- ЗАДАЧИ ---- */
-  const doneOnDay = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStartMs && t.doneAt < dayEndMs);
-  const createdOnDay = tasks.filter(t => t.created >= dayStartMs && t.created < dayEndMs);
-  const activeTasks = tasks.filter(t => !t.done);
-  const overdueTasks = activeTasks.filter(t => t.deadline && t.deadline < Date.now());
-  const todayTasks = activeTasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), new Date(dateStr + 'T00:00:00')));
-
-  if (doneOnDay.length > 0 || createdOnDay.length > 0 || activeTasks.length > 0) {
-    report += `✅ ЗАДАЧИ\n`;
-    report += `${'-'.repeat(60)}\n`;
-
-    if (doneOnDay.length > 0) {
-      report += `\n  ✓ Выполнено в этот день (${doneOnDay.length}):\n`;
-      doneOnDay.sort((a,b) => a.doneAt - b.doneAt).forEach(t => {
-        const timeStr = formatTimeShort(t.doneAt);
-        const late = t.deadline && t.doneAt > t.deadline;
-        const mark = late ? '🔴' : '🟢';
-        report += `    ${mark} ${timeStr} — ${t.text}\n`;
-        if (t.result) report += `       💬 ${t.result}\n`;
-      });
-    }
-
-    if (createdOnDay.length > 0) {
-      report += `\n  ➕ Поставлено на этот день (${createdOnDay.length}):\n`;
-      createdOnDay.sort((a,b) => a.created - b.created).forEach(t => {
-        const status = t.done ? '✅' : '⬜';
-        report += `    ${status} ${t.text}\n`;
-      });
-    }
-
-    if (activeTasks.length > 0) {
-      report += `\n  🔄 В работе сейчас (${activeTasks.length}):\n`;
-      const sortedActive = [...activeTasks].sort((a, b) => {
-        const av = a.deadline || Infinity;
-        const bv = b.deadline || Infinity;
-        return av - bv;
-      });
-      sortedActive.slice(0, 30).forEach(t => {
-        const overdue = t.deadline && t.deadline < Date.now();
-        const mark = overdue ? '🔴' : '⬜';
-        const dl = t.deadline ? ` (до ${formatDate(new Date(t.deadline)).slice(0, 16)})` : '';
-        report += `    ${mark} ${t.text}${dl}\n`;
-      });
-      if (sortedActive.length > 30) {
-        report += `    …и ещё ${sortedActive.length - 30}\n`;
-      }
-    }
-
-    report += `\n  📈 Статистика задач:\n`;
-    report += `     • Всего активных: ${activeTasks.length}\n`;
-    report += `     • Просрочено: ${overdueTasks.length}\n`;
-    report += `     • На сегодня: ${todayTasks.length}\n`;
-    report += `     • Выполнено за день: ${doneOnDay.length}\n`;
-    report += `     • Поставлено за день: ${createdOnDay.length}\n`;
-    report += `\n`;
-  }
-
-  /* ---- МОЁ ВРЕМЯ ---- */
-  const myItems = workLog
-    .filter(w => w.date === dateStr && w.endTs)
-    .sort((a, b) => a.startTs - b.startTs);
-
-  const myTotalMs = myItems.reduce((s, w) => s + (w.endTs - w.startTs), 0);
-  const mySyncMs = myItems
-    .filter(w => w.syncEmployeeId)
-    .reduce((s, w) => s + (w.endTs - w.startTs), 0);
-
-  const targetMs = WORK_DAY_HOURS * 3600000;
-  const myPct = Math.round(myTotalMs / targetMs * 100);
-
-  report += `⏱ МОЁ ВРЕМЯ — ${fmtDur(myTotalMs)} (${myPct}% от ${WORK_DAY_HOURS}ч)\n`;
-  report += `${'-'.repeat(60)}\n`;
-  if (myItems.length === 0) {
-    report += 'Записей нет\n';
-  } else {
-    myItems.forEach((w, i) => {
-      const dur = fmtDurShort(w.endTs - w.startTs);
-      const syncTag = w.syncEmployeeId
-        ? `  🤝 с ${(employees.find(e => e.id === w.syncEmployeeId) || {}).name || w.syncEmployeeName || 'КМ'}`
-        : '';
-      report += `${String(i + 1).padStart(2)}. ${w.start}–${w.end} (${dur})${syncTag}\n`;
-      report += `    ${w.text}\n`;
-    });
-  }
-  report += `\n`;
-  if (mySyncMs > 0) {
-    report += `   ↳ из них в сессиях с КМ: ${fmtDur(mySyncMs)}\n`;
-    report += `   ↳ моя самостоятельная работа: ${fmtDur(myTotalMs - mySyncMs)}\n`;
-  }
-
-  const myGaps = calcUnaccountedGaps(myItems, dateStr);
-  if (myGaps.length > 0) {
-    const gapMs = myGaps.reduce((s, g) => s + (g[1] - g[0]), 0);
-    report += `\n   ⚠️ Не учтено в рабочем окне (${WORK_WINDOW_START}:00–${WORK_WINDOW_END}:00): ${fmtDur(gapMs)}\n`;
-    myGaps.forEach(g => {
-      report += `      ${formatTimeShort(g[0])} – ${formatTimeShort(g[1])} (${fmtDurShort(g[1] - g[0])})\n`;
-    });
-  } else if (myItems.length > 0) {
-    report += `\n   ✓ Весь рабочий день покрыт записями\n`;
-  }
-  report += `\n`;
-
-  /* ---- ПО СОТРУДНИКАМ ---- */
-  report += `👥 ПО СОТРУДНИКАМ\n`;
-  report += `${'='.repeat(60)}\n\n`;
-
   const daySessions = sessions.filter(s => s.startTs >= r.start && s.startTs < r.end);
   const dayAbs = empAbsences.filter(a => a.date === dateStr).sort((a, b) => a.startTs - b.startTs);
   const dayEmpLogs = empWorkLog.filter(w => w.date === dateStr && w.endTs);
   const dayAbsRemarks = collectAbsenceRemarks(dayAbs);
+  const dist = kmTaskList(kmData);
 
   const pairs = [];
   const seenRec = {};
@@ -4412,121 +4238,489 @@ function buildDailyReport(dateStr, kmData) {
     if (!pairs.some(p => p.empId === id)) pairs.push({ empId: id, rec: null, name: empNameOf(id) });
   });
 
-  const activePairs = pairs.filter(p => {
-    if (p.empId != null) {
-      if (daySessions.some(s => s.employeeId === p.empId)) return true;
-      if (dayEmpLogs.some(w => w.employeeId === p.empId)) return true;
-      if (dayAbs.some(a => a.employeeId === p.empId)) return true;
-    }
-    if (p.rec && kmDayHasData(p.rec, dateStr)) return true;
-    return false;
+  const allPairs = pairs.map(p => {
+    const rec = p.rec;
+    const d = rec ? rec.doc : null;
+    const empId = p.empId;
+    const empSessions = empId != null ? daySessions.filter(s => s.employeeId === empId) : [];
+    const empLogs = empId != null ? dayEmpLogs.filter(w => w.employeeId === empId) : [];
+    const empAbs = empId != null ? dayAbs.filter(a => a.employeeId === empId) : [];
+    const empRemarks = collectAbsenceRemarks(empAbs);
+    const ownEntries = d ? (d.entries || []).filter(x => x.date === dateStr && x.endTs) : [];
+    const ownMs = ownEntries.reduce((s, x) => s + (x.endTs - x.startTs), 0);
+    const sessMs = empLogs.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+    const totalMs = ownMs + sessMs;
+    const empAbsMs = empAbs.reduce((s, a) => s + (a.endTs - a.startTs), 0);
+    const allCalls = empSessions.flatMap(s => s.calls || []);
+    const okCalls = allCalls.filter(c => c.mark === 'ok').length;
+    const failCalls = allCalls.filter(c => c.mark === 'fail').length;
+    const noneCalls = allCalls.length - okCalls - failCalls;
+    const callMs = allCalls.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+    const conv = allCalls.length > 0 ? Math.round(okCalls / allCalls.length * 100) : 0;
+    const ownCalls = d ? (d.calls || []).filter(c => c.date === dateStr) : [];
+    const checklist = d ? (d.checklist || []) : [];
+    const chkDoneDay = checklist.filter(c => c.doneDay === dateStr);
+    const chkPending = checklist.filter(c => c.by === 'admin' && !c.done);
+    const chkOwnNew = checklist.filter(c => c.by !== 'admin' && !c.done && c.ts >= r.start && c.ts < r.end);
+    const chkRelevant = chkDoneDay.concat(chkPending, chkOwnNew);
+    const chkLateCnt = chkDoneDay.filter(chkIsLate).length;
+    const mine = rec ? dist.filter(t =>
+      t.kmIds === 'all' || (Array.isArray(t.kmIds) && t.kmIds.map(String).includes(String(rec.id)))) : [];
+    const distDone = mine.filter(t => {
+      const rep = (t.kmReport || {})[String(rec.id)];
+      return rep && rep.done;
+    }).length;
+    const distLate = mine.filter(t => {
+      const rep = (t.kmReport || {})[String(rec.id)];
+      return rep && rep.late && rep.done;
+    }).length;
+    const lateStart = empRemarks.some(rm => rm.code === 'late');
+    const dayEvents = d ? (d.events || []).filter(e => e.ts >= r.start && e.ts < r.end) : [];
+    const anti = {};
+    ['bg', 'idle', 'offline', 'logout'].forEach(tp => { anti[tp] = dayEvents.filter(e => e.type === tp).length; });
+    const alarms = dayEvents.filter(e => e.type === 'alarm').length;
+    const hasData = (empId != null &&
+      (empSessions.length > 0 || empLogs.length > 0 || empAbs.length > 0)) ||
+      (rec && kmDayHasData(rec, dateStr));
+    return {
+      empId: empId, rec: rec, name: p.name, d: d, hasData: hasData,
+      empSessions: empSessions, empLogs: empLogs, empAbs: empAbs, empRemarks: empRemarks,
+      ownEntries: ownEntries, ownCalls: ownCalls, ownMs: ownMs, sessMs: sessMs,
+      totalMs: totalMs, empAbsMs: empAbsMs,
+      allCalls: allCalls, okCalls: okCalls, failCalls: failCalls, noneCalls: noneCalls,
+      callMs: callMs, conv: conv,
+      checklist: checklist, chkDoneDay: chkDoneDay, chkPending: chkPending,
+      chkOwnNew: chkOwnNew, chkRelevant: chkRelevant, chkLateCnt: chkLateCnt,
+      mine: mine, distDone: distDone, distTotal: mine.length, distLate: distLate,
+      lateStart: lateStart, anti: anti, alarms: alarms,
+      st: rec ? (rec.status || 'work') : 'work'
+    };
+  });
+  allPairs.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  const activePairs = allPairs.filter(p => p.hasData);
+  return { r: r, daySessions: daySessions, dayAbs: dayAbs, dayEmpLogs: dayEmpLogs,
+    dayAbsRemarks: dayAbsRemarks, allPairs: allPairs, activePairs: activePairs };
+}
+
+/* ---- Сборка модели отчёта (данные + расчёты, без вывода) ---- */
+function buildReportModel(dateStr, kmData) {
+  kmData = kmData || kmDataEmpty();
+  const emp = computeEmpDayPairs(dateStr, kmData);
+  const r = emp.r;
+  const dayStartMs = r.start, dayEndMs = r.end;
+  const dayLabel = new Date(r.start).toLocaleDateString('ru-RU', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
   });
 
-  if (activePairs.length === 0) {
-    report += 'Активности с КМ за этот день нет\n\n';
+  const doneOnDay = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStartMs && t.doneAt < dayEndMs);
+  const createdOnDay = tasks.filter(t => t.created >= dayStartMs && t.created < dayEndMs);
+  const activeTasks = tasks.filter(t => !t.done);
+  const overdueTasks = activeTasks.filter(t => t.deadline && t.deadline < Date.now());
+  const todayTasks = activeTasks.filter(t => t.deadline && isSameDay(new Date(t.deadline), new Date(dateStr + 'T00:00:00')));
+  const planToday = activeTasks.filter(t => t.deadline && t.deadline >= dayStartMs && t.deadline < dayEndMs);
+
+  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
+  let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
+  pulseItems.forEach(it => {
+    const p = parseFloat(String(it.plan || '').replace(',', '.'));
+    const f = parseFloat(String(it.fact || '').replace(',', '.'));
+    if (!isNaN(p)) { planSum += p; hasPlan = true; }
+    if (!isNaN(f)) { factSum += f; hasFact = true; }
+  });
+
+  const distStats = kmTaskList(kmData).map(t => {
+    const recs = kmRecList(kmData);
+    const ids = t.kmIds === 'all' ? recs.map(x => x.id) : (Array.isArray(t.kmIds) ? t.kmIds : []);
+    const reps = ids.map(id => (t.kmReport || {})[String(id)]);
+    return {
+      t: t, ids: ids, total: ids.length,
+      doneN: reps.filter(x => x && x.done).length,
+      lateN: reps.filter(x => x && x.late && x.done).length,
+      notesN: reps.filter(x => x && x.note).length
+    };
+  });
+
+  const myItems = workLog.filter(w => w.date === dateStr && w.endTs).sort((a, b) => a.startTs - b.startTs);
+  const myTotalMs = myItems.reduce((s, w) => s + (w.endTs - w.startTs), 0);
+  const mySyncMs = myItems.filter(w => w.syncEmployeeId).reduce((s, w) => s + (w.endTs - w.startTs), 0);
+  const myPct = Math.round(myTotalMs / (WORK_DAY_HOURS * 3600000) * 100);
+  const myGaps = calcUnaccountedGaps(myItems, dateStr);
+
+  const timeline = buildDayTimeline(dateStr, kmData);
+
+  const totalCallsAll = emp.daySessions.flatMap(s => s.calls || []);
+  const okAll = totalCallsAll.filter(c => c.mark === 'ok').length;
+  const failAll = totalCallsAll.filter(c => c.mark === 'fail').length;
+  const convAll = totalCallsAll.length > 0 ? Math.round(okAll / totalCallsAll.length * 100) : 0;
+  const callMsAll = totalCallsAll.reduce((s, c) => s + (c.endTs - c.startTs), 0);
+
+  const kpi = {
+    active: activeTasks.length, overdue: overdueTasks.length,
+    doneToday: doneOnDay.length, createdToday: createdOnDay.length, todayTasks: todayTasks.length,
+    sessions: emp.daySessions.length,
+    calls: totalCallsAll.length, okCalls: okAll, failCalls: failAll, conv: convAll, callMs: callMsAll,
+    empActive: emp.activePairs.length, empTotal: emp.allPairs.length,
+    myTotalMs: myTotalMs, mySyncMs: mySyncMs, myPct: myPct,
+    chkDone: 0, chkTotal: 0, chkLate: 0
+  };
+  const recsAll = kmRecList(kmData);
+  const allChk = recsAll.flatMap(x => (x.doc && x.doc.checklist) || []);
+  const chkDoneAll = allChk.filter(c => c.doneDay === dateStr);
+  kpi.chkDone = chkDoneAll.length;
+  kpi.chkTotal = emp.activePairs.reduce((s, p) => s + p.chkRelevant.length, 0);
+  kpi.chkLate = chkDoneAll.filter(chkIsLate).length;
+
+  const m = {
+    dateStr: dateStr, r: r, dayLabel: dayLabel, kmData: kmData,
+    emp: emp, kpi: kpi,
+    pulseItems: pulseItems, planSum: planSum, factSum: factSum, hasPlan: hasPlan, hasFact: hasFact,
+    doneOnDay: doneOnDay, createdOnDay: createdOnDay, activeTasks: activeTasks,
+    overdueTasks: overdueTasks, todayTasks: todayTasks, planToday: planToday,
+    distStats: distStats,
+    myItems: myItems, myTotalMs: myTotalMs, mySyncMs: mySyncMs, myPct: myPct, myGaps: myGaps,
+    timeline: timeline
+  };
+  m.attention = buildReportAttention(dateStr, kmData, m);
+  m.dataQuality = buildReportDataQuality(dateStr, kmData, m);
+  return m;
+}
+
+/* ---- «Требует внимания» — управленческий список проблем ---- */
+function buildReportAttention(dateStr, kmData, m) {
+  const items = [];
+  if (!kmData.ok && kmData.reason) {
+    items.push({ title: 'Листы КМ не загружены', lines: [kmData.reason] });
+  }
+  if (m.overdueTasks.length > 0) {
+    const byDate = {};
+    m.overdueTasks.forEach(t => {
+      const k = t.deadline ? formatDate(new Date(t.deadline)).slice(0, 10) : 'без срока';
+      (byDate[k] = byDate[k] || []).push(t);
+    });
+    const lines = [];
+    Object.keys(byDate).sort((a, b) => {
+      const pa = a.split('.'), pb = b.split('.');
+      return (pa[2] + pa[1] + pa[0]).localeCompare(pb[2] + pb[1] + pb[0]);
+    }).forEach(dt => {
+      const list = byDate[dt];
+      lines.push(`${list.length} — срок ${dt}:`);
+      list.slice(0, 6).forEach(t => lines.push(`   • ${t.text}${t.repeat ? ' ↻' : ''}`));
+      if (list.length > 6) lines.push(`   … и ещё ${list.length - 6}`);
+    });
+    items.push({ title: `Просрочено задач: ${m.overdueTasks.length}`, lines: lines });
+  }
+  const lateRows = [];
+  m.distStats.forEach(ds => {
+    ds.ids.forEach(id => {
+      const rep = (ds.t.kmReport || {})[String(id)];
+      if (rep && rep.done && rep.late) {
+        const rec = kmRecById(kmData, id);
+        lateRows.push(`${rec ? rec.name : id} · ${ds.t.text} · дедлайн ${ds.t.due || '—'}` +
+          (rep.doneTs ? ` · выполнение ${formatTimeShort(rep.doneTs)}` : ''));
+      }
+    });
+  });
+  if (lateRows.length > 0) {
+    items.push({ title: `Выполнено с опозданием: ${lateRows.length}`, lines: lateRows });
+  }
+  const idle = m.emp.allPairs.filter(p => !p.hasData).map(p => p.name);
+  if (idle.length > 0) {
+    items.push({
+      title: `Без активности за день: ${idle.length}`,
+      lines: [idle.slice(0, 12).join(', ') + (idle.length > 12 ? ' …' : ''),
+        'Нет записей времени, сессий, звонков и отметок чеклиста — проверить полноту источников.']
+    });
+  }
+  const expl = m.emp.dayAbsRemarks.filter(rm => rm.needExplanation);
+  if (expl.length > 0) {
+    items.push({
+      title: `Требуется объяснительная / пояснение: ${expl.length}`,
+      lines: expl.map(rm => `${rm.empName} — ${rm.code === 'late' ? 'опоздание' : absLabel(rm.absence.type)}` +
+        ` ${fmtDurShort(rm.absence.endTs - rm.absence.startTs)}`)
+    });
+  }
+  const nowD = new Date();
+  const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
+  const isToday = dateStr === todayInput();
+  const chkOd = [];
+  m.emp.allPairs.forEach(p => {
+    p.chkPending.forEach(c => {
+      if (!c.due) return;
+      const parts = String(c.due).split(':');
+      const dueMin = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+      const passed = dateStr < todayInput() || (isToday && dueMin < nowMin);
+      if (passed) chkOd.push(`${p.name}: ${c.text} (дедлайн ${c.due})`);
+    });
+  });
+  if (chkOd.length > 0) {
+    items.push({
+      title: `Чеклист с просроченным дедлайном: ${chkOd.length}`,
+      lines: chkOd.slice(0, 10).concat(chkOd.length > 10 ? [`… и ещё ${chkOd.length - 10}`] : [])
+    });
+  }
+  const unclosed = m.emp.daySessions.filter(s => !s.endTs);
+  if (unclosed.length > 0) {
+    items.push({
+      title: `Незакрытые сессии: ${unclosed.length}`,
+      lines: unclosed.map(s => `${empNameOf(s.employeeId)} — начата ${formatTimeShort(s.startTs)}`)
+    });
+  }
+  return items;
+}
+
+/* ---- Контроль качества данных ---- */
+function buildReportDataQuality(dateStr, kmData, m) {
+  const lines = [];
+  const recs = kmRecList(kmData);
+  if (kmData.ok) lines.push(`Листы КМ: загружено ${recs.length}`);
+  else lines.push(`Листы КМ: не загружены (${kmData.reason || 'нет конфигурации'})`);
+  const noSheet = employees.filter(e => e.cloudId == null).map(e => e.name);
+  if (noSheet.length > 0) lines.push(`Сотрудники без привязки к облаку: ${noSheet.join(', ')}`);
+  const empCloud = new Set(employees.filter(e => e.cloudId != null).map(e => String(e.cloudId)));
+  const orphan = recs.filter(r => !empCloud.has(String(r.id))).map(r => r.name);
+  if (orphan.length > 0) lines.push(`Листы КМ без сотрудника в команде: ${orphan.join(', ')}`);
+  const distTexts = new Set(m.distStats.map(ds => String(ds.t.text || '').trim().toLowerCase()));
+  const orphChk = [];
+  recs.forEach(rec => {
+    ((rec.doc && rec.doc.checklist) || []).forEach(c => {
+      if (c.by !== 'admin') return;
+      const key = String(c.text || '').trim().toLowerCase();
+      if (!distTexts.has(key)) orphChk.push(`«${c.text}» (${rec.name})`);
+    });
+  });
+  if (orphChk.length > 0) {
+    lines.push(`Пункты чеклиста не из перечня задач: ${orphChk.slice(0, 10).join('; ')}` +
+      (orphChk.length > 10 ? ` … ещё ${orphChk.length - 10}` : ''));
+  }
+  const unclosed = m.emp.daySessions.filter(s => !s.endTs).length;
+  if (unclosed > 0) lines.push(`Незакрытые сессии: ${unclosed}`);
+  const openEntries = recs.flatMap(r2 => ((r2.doc && r2.doc.entries) || []))
+    .filter(x => x.date === dateStr && !x.endTs).length;
+  if (openEntries > 0) lines.push(`Записи времени КМ без окончания: ${openEntries}`);
+  const openMy = workLog.filter(w => w.date === dateStr && !w.endTs).length;
+  if (openMy > 0) lines.push(`Мои записи без окончания: ${openMy}`);
+  lines.push(`Событий в хронологии (после склейки интервалов): ${m.timeline.length}`);
+  return lines;
+}
+
+/* ---- Текстовый отчёт: управленческая сводка сверху, детали ниже ---- */
+function renderDailyReportText(m) {
+  const dateStr = m.dateStr, kmData = m.kmData, r = m.r, kpi = m.kpi;
+  let report = '';
+
+  /* ПАСПОРТ */
+  report += `📊 ЕЖЕДНЕВНЫЙ ОТЧЁТ РУКОВОДИТЕЛЯ\n`;
+  report += `📅 ${m.dayLabel}\n`;
+  report += `Срез данных: ${formatDate(new Date())}`;
+  if (kmData.ok) {
+    report += ` · листов КМ: ${kmRecList(kmData).length}` +
+      (kmData.fetchedAt ? ` (загружено ${formatTime(kmData.fetchedAt)})` : '');
+  } else if (kmData.reason) {
+    report += ` · ⚠️ листы КМ: ${kmData.reason}`;
+  }
+  report += `\n${'='.repeat(60)}\n\n`;
+
+  /* 1. РЕЗУЛЬТАТ ДНЯ */
+  report += `1️⃣ РЕЗУЛЬТАТ ДНЯ\n`;
+  report += `${'-'.repeat(60)}\n`;
+  report += `• Задачи: активных ${kpi.active} · просрочено ${kpi.overdue}` +
+    ` · на сегодня ${kpi.todayTasks} · выполнено за день ${kpi.doneToday} · поставлено ${kpi.createdToday}\n`;
+  report += `• Сессии с КМ: ${kpi.sessions} · звонков ${kpi.calls}` +
+    ` (✅ ${kpi.okCalls}, ❌ ${kpi.failCalls}, конверсия ${kpi.conv}%) · в звонках ${fmtDurCall(kpi.callMs)}\n`;
+  report += `• КМ с активностью: ${kpi.empActive} из ${kpi.empTotal}\n`;
+  report += `• Чеклисты КМ: выполнено ${kpi.chkDone}` + (kpi.chkLate ? ` · не в срок ${kpi.chkLate}` : '') + `\n`;
+  report += `• Моё время: ${fmtDur(kpi.myTotalMs)} (${kpi.myPct}% от ${WORK_DAY_HOURS}ч)` +
+    (kpi.mySyncMs > 0 ? ` · из них в сессиях с КМ ${fmtDur(kpi.mySyncMs)}` : '') + `\n`;
+  if (m.pulseItems.length > 0) {
+    report += `\n📌 Срез дня (план / факт):\n`;
+    m.pulseItems.forEach(it => {
+      report += `    ${it.label} ${it.plan || '0'}/${it.fact || '0'}\n`;
+    });
+    const pct = m.hasPlan && m.planSum > 0 ? ` — ${Math.round(m.factSum / m.planSum * 100)}%` : '';
+    const diff = (m.hasPlan && m.hasFact) ? ` (${m.factSum - m.planSum >= 0 ? '+' : ''}${m.factSum - m.planSum})` : '';
+    report += `    Итого: план ${m.hasPlan ? m.planSum : '—'} / факт ${m.hasFact ? m.factSum : '—'}${pct}${diff}\n`;
+  }
+  report += `\n`;
+
+  /* 2. ТРЕБУЕТ ВНИМАНИЯ */
+  report += `2️⃣ ТРЕБУЕТ ВНИМАНИЯ\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (m.attention.length === 0) {
+    report += `✓ Замечаний нет\n\n`;
   } else {
-    activePairs.forEach(p => {
-      const rec = p.rec;
-      const d = rec ? rec.doc : null;
-      const empId = p.empId;
+    m.attention.forEach((it, i) => {
+      report += `${i + 1}. ${it.title}\n`;
+      it.lines.forEach(ln => { report += `   ${ln}\n`; });
+      report += `\n`;
+    });
+  }
 
-      const empSessions = empId != null ? daySessions.filter(s => s.employeeId === empId) : [];
-      const empLogs = empId != null ? dayEmpLogs.filter(w => w.employeeId === empId) : [];
-      const empAbs = empId != null ? dayAbs.filter(a => a.employeeId === empId) : [];
-      const empRemarks = collectAbsenceRemarks(empAbs);
+  /* 3. КОМАНДА — сравнительная таблица */
+  report += `3️⃣ КОМАНДА\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (m.emp.allPairs.length === 0) {
+    report += `Нет данных о сотрудниках\n\n`;
+  } else {
+    const w = (s, n) => String(s).padEnd(n);
+    report += `${w('Сотрудник', 16)}${w('Время', 8)}${w('Задачи', 8)}${w('Чеклист', 9)}${w('Звонки', 8)}${w('Конверс', 8)}Опозд\n`;
+    m.emp.allPairs.forEach(p => {
+      const stBadge = p.st === 'sick' ? ' 🤒' : p.st === 'vacation' ? ' 🌴' : '';
+      const timeS = p.hasData ? fmtDurShort(p.totalMs) : '—';
+      const distS = p.rec ? (p.distTotal > 0 ? `${p.distDone}/${p.distTotal}` : '—') : '—';
+      const chkS = p.rec ? (p.chkRelevant.length > 0 ? `${p.chkDoneDay.length}/${p.chkRelevant.length}` : '—') : '—';
+      const callS = p.hasData ? `${p.allCalls.length}` : '—';
+      const convS = p.allCalls.length > 0 ? `${p.conv}%` : '—';
+      const lateS = p.lateStart ? '⚠ да' : (p.hasData ? '—' : '—');
+      report += `${w(p.name + stBadge, 16)}${w(timeS, 8)}${w(distS, 8)}${w(chkS, 9)}${w(callS, 8)}${w(convS, 8)}${lateS}\n`;
+    });
+    report += `— нет данных за день · Задачи: выполнено/распределено · Чеклист: выполнено/всего\n`;
+    if (m.kpi.chkLate > 0) report += `⚠ Чеклист-пунктов не вовремя: ${m.kpi.chkLate}\n`;
+    report += `\n`;
+  }
 
-      const ownEntries = d ? (d.entries || []).filter(x => x.date === dateStr && x.endTs) : [];
-      const ownMs = ownEntries.reduce((s, x) => s + (x.endTs - x.startTs), 0);
-      const sessMs = empLogs.reduce((s, w) => s + (w.endTs - w.startTs), 0);
-      const totalMs = ownMs + sessMs;
-      const empAbsMs = empAbs.reduce((s, a) => s + (a.endTs - a.startTs), 0);
+  /* 4. ЗАДАЧИ И ПЛАНЫ (без дублей: статусы КМ — только в разделах сотрудников) */
+  report += `4️⃣ ЗАДАЧИ И ПЛАНЫ\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (m.planToday.length > 0) {
+    report += `\n  📅 Мои задачи на этот день (${m.planToday.length}):\n`;
+    [...m.planToday].sort((a, b) => a.deadline - b.deadline).forEach(t => {
+      const ds = classifyDue(t.done, t.doneAt, t.deadline);
+      report += `    ${DUE_GLYPH[ds]} до ${formatTimeShort(t.deadline)} — ${t.text}` +
+        (t.repeat ? ` (повтор: ${REPEAT_LBL[t.repeat] || t.repeat})` : '') + `\n`;
+    });
+  }
+  if (m.doneOnDay.length > 0) {
+    report += `\n  ✓ Выполнено в этот день (${m.doneOnDay.length}):\n`;
+    [...m.doneOnDay].sort((a, b) => a.doneAt - b.doneAt).forEach(t => {
+      const ds = classifyDue(t.done, t.doneAt, t.deadline);
+      report += `    ${DUE_GLYPH[ds]} ${formatTimeShort(t.doneAt)} — ${t.text}` +
+        (ds === 'LATE' ? ` (${DUE_RU[ds]})` : '') + `\n`;
+      if (t.result) report += `       💬 ${t.result}\n`;
+    });
+  }
+  if (m.createdOnDay.length > 0) {
+    report += `\n  ➕ Поставлено на этот день (${m.createdOnDay.length}):\n`;
+    [...m.createdOnDay].sort((a, b) => a.created - b.created).forEach(t => {
+      const ds = classifyDue(t.done, t.doneAt, t.deadline);
+      report += `    ${t.done ? DUE_GLYPH[ds] : '⬜'} ${t.text}\n`;
+    });
+  }
+  if (m.activeTasks.length > 0) {
+    report += `\n  🔄 В работе сейчас (${m.activeTasks.length}):\n`;
+    [...m.activeTasks].sort((a, b) => (a.deadline || Infinity) - (b.deadline || Infinity))
+      .slice(0, 30).forEach(t => {
+        const ds = classifyDue(t.done, t.doneAt, t.deadline);
+        const dl = t.deadline ? ` (до ${formatDate(new Date(t.deadline)).slice(0, 16)})` : '';
+        report += `    ${DUE_GLYPH[ds]} ${t.text}${dl}\n`;
+      });
+    if (m.activeTasks.length > 30) report += `    …и ещё ${m.activeTasks.length - 30}\n`;
+  }
+  if (m.distStats.length > 0) {
+    report += `\n  📋 Задачи, распределённые на КМ (${m.distStats.length}) — детали в разделах сотрудников:\n`;
+    m.distStats.forEach(ds => {
+      const t = ds.t;
+      const lateTag = ds.lateN > 0 ? ` · не в срок: ${ds.lateN}` : '';
+      const noteTag = ds.notesN > 0 ? ` · комментариев: ${ds.notesN}` : '';
+      const cnt = kmRecList(kmData).length > 0 ? `${ds.doneN} из ${ds.total} выполнено` : 'листы КМ не загружены';
+      report += `    ▸ [${t.due || '—'}]${t.repeat ? ' ↻' : ''} ${t.text} — ${cnt}${lateTag}${noteTag}\n`;
+    });
+  }
+  if (m.planToday.length === 0 && m.doneOnDay.length === 0 && m.createdOnDay.length === 0 &&
+      m.activeTasks.length === 0 && m.distStats.length === 0) {
+    report += `Задач нет\n`;
+  }
+  report += `\n`;
 
-      const allCalls = empSessions.flatMap(s => s.calls || []);
-      const okCalls = allCalls.filter(c => c.mark === 'ok').length;
-      const failCalls = allCalls.filter(c => c.mark === 'fail').length;
-      const noneCalls = allCalls.length - okCalls - failCalls;
-      const callMs = allCalls.reduce((s, c) => s + (c.endTs - c.startTs), 0);
-      const conv = allCalls.length > 0 ? Math.round(okCalls / allCalls.length * 100) : 0;
-
-      const ownCalls = d ? (d.calls || []).filter(c => c.date === dateStr) : [];
-      const checklist = d ? (d.checklist || []) : [];
-      const chkDoneDay = checklist.filter(c => c.doneDay === dateStr);
-      const chkPending = checklist.filter(c => c.by === 'admin' && !c.done);
-      const chkOwnNew = checklist.filter(c => c.by !== 'admin' && !c.done && c.ts >= r.start && c.ts < r.end);
-      const chkRelevant = chkDoneDay.concat(chkPending, chkOwnNew);
-      const chkLateCnt = chkDoneDay.filter(chkIsLate).length;
-
-      const st = rec ? (rec.status || 'work') : 'work';
-      const stBadge = st === 'sick' ? '  🤒 больничный' : st === 'vacation' ? '  🌴 отпуск' : '';
+  /* 5. ПО СОТРУДНИКАМ (детали) */
+  report += `5️⃣ ПО СОТРУДНИКАМ (подробно)\n`;
+  report += `${'='.repeat(60)}\n\n`;
+  if (m.emp.activePairs.length === 0) {
+    report += `Активности с КМ за этот день нет\n\n`;
+  } else {
+    m.emp.activePairs.forEach(p => {
+      const d = p.d;
+      const stBadge = p.st === 'sick' ? '  🤒 больничный' : p.st === 'vacation' ? '  🌴 отпуск' : '';
 
       report += `👤 ${p.name.toUpperCase()}${stBadge}\n`;
       report += `${'-'.repeat(60)}\n`;
-      report += `⏱ Время: ${fmtDur(totalMs)}`;
-      if (sessMs > 0 || ownMs > 0) report += `  (сессии: ${fmtDur(sessMs)}, свои записи: ${fmtDur(ownMs)})`;
+      if (p.distTotal > 0) {
+        report += `📈 Задачи от руководителя: ${p.distDone}/${p.distTotal}` +
+          (p.distLate > 0 ? ` · не в срок: ${p.distLate}` : '') + `\n`;
+      }
+      report += `⏱ Время: ${fmtDur(p.totalMs)}`;
+      if (p.sessMs > 0 || p.ownMs > 0) report += `  (сессии: ${fmtDur(p.sessMs)}, свои записи: ${fmtDur(p.ownMs)})`;
       report += `\n`;
-      if (empAbsMs > 0) report += `🕓 Отсутствия: ${fmtDur(empAbsMs)}\n`;
-      report += `🎧 Сессий: ${empSessions.length}   📞 Звонки (сессии): ${allCalls.length}`;
-      if (allCalls.length > 0) {
-        report += `  ✅ ${okCalls}  ❌ ${failCalls}` + (noneCalls > 0 ? `  ⚪ ${noneCalls}` : '') + `  конверсия ${conv}%`;
+      if (p.empAbsMs > 0) report += `🕓 Отсутствия: ${fmtDur(p.empAbsMs)}\n`;
+      report += `🎧 Сессий: ${p.empSessions.length}   📞 Звонки (сессии): ${p.allCalls.length}`;
+      if (p.allCalls.length > 0) {
+        report += `  ✅ ${p.okCalls}  ❌ ${p.failCalls}` + (p.noneCalls > 0 ? `  ⚪ ${p.noneCalls}` : '') +
+          `  конверсия ${p.conv}%`;
       }
       report += `\n`;
-      if (allCalls.length > 0) report += `📞 Время в звонках: ${fmtDurCall(callMs)}   В среднем: ${fmtDurCall(callMs / allCalls.length)}\n`;
+      if (p.allCalls.length > 0) {
+        report += `📞 Время в звонках: ${fmtDurCall(p.callMs)}   В среднем: ${fmtDurCall(p.callMs / p.allCalls.length)}\n`;
+      }
       if (d) {
-        report += `☑ Чеклист: ${chkDoneDay.length}/${chkRelevant.length}` +
-          (chkLateCnt > 0 ? `   🔴 не вовремя: ${chkLateCnt}` : '') + `\n`;
-        report += `📱 Личные звонки: ${ownCalls.length}   ⏱ Свои записи: ${ownEntries.length}\n`;
+        report += `☑ Чеклист: ${p.chkDoneDay.length}/${p.chkRelevant.length}` +
+          (p.chkLateCnt > 0 ? `   🔴 не вовремя: ${p.chkLateCnt}` : '') + `\n`;
+        report += `📱 Личные звонки: ${p.ownCalls.length}   ⏱ Свои записи: ${p.ownEntries.length}\n`;
       }
       report += `\n`;
 
       /* Чеклист дня */
-      if (chkRelevant.length > 0) {
+      if (p.chkRelevant.length > 0) {
         report += `  📋 ЧЕКЛИСТ ДНЯ\n`;
-        chkDoneDay.slice().sort((a, b) => (a.doneTs || 0) - (b.doneTs || 0)).forEach(c => {
+        p.chkDoneDay.slice().sort((a, b) => (a.doneTs || 0) - (b.doneTs || 0)).forEach(c => {
           const t = new Date(c.doneTs);
           report += `    ${pad(t.getHours())}:${pad(t.getMinutes())} ✓ ${c.text}` +
             (c.by === 'admin' ? ' 📌' : '') + (chkIsLate(c) ? ' 🔴 не вовремя' : '') + `\n`;
           if (c.note) report += `       💬 ${c.note}\n`;
         });
-        chkPending.forEach(c => {
+        p.chkPending.forEach(c => {
           report += `    ⬜ ${c.text}` + (c.due ? ` (дедлайн ${c.due})` : '') +
             (c.repeat ? ' ↻' : '') + ` — не выполнено\n`;
         });
-        chkOwnNew.forEach(c => {
+        p.chkOwnNew.forEach(c => {
           report += `    ⬜ ${c.text} — не выполнено\n`;
         });
         report += `\n`;
       }
 
-      /* Задачи от руководителя (план / статус / комментарий) */
-      if (rec) {
-        const mine = kmTaskList(kmData).filter(t =>
-          t.kmIds === 'all' || (Array.isArray(t.kmIds) && t.kmIds.map(String).includes(String(rec.id))));
-        if (mine.length > 0) {
-          report += `  📈 ЗАДАЧИ ОТ РУКОВОДИТЕЛЯ (план):\n`;
-          mine.forEach(t => {
-            const rep = (t.kmReport || {})[String(rec.id)];
-            let st2 = '⬜ не отмечено';
-            if (rep) {
-              if (rep.done) {
-                st2 = rep.doneDay === dateStr
-                  ? '✅ выполнено' + (rep.doneTs ? ' в ' + formatTimeShort(rep.doneTs) : '')
-                  : '✅ выполнено ' + (rep.doneDay || '');
-              } else {
-                st2 = '⏳ не выполнено';
-              }
-              if (rep.late) st2 += ' 🔴 не в срок';
-            }
-            report += `    ▸ [${t.due || '—'}]${t.repeat ? ' ↻' : ''} ${t.text} — ${st2}\n`;
-            if (rep && rep.note) report += `       💬 ${rep.note}\n`;
-          });
-          report += `\n`;
-        }
+      /* Задачи от руководителя — статус + комментарий */
+      if (p.rec && p.mine.length > 0) {
+        report += `  📈 ЗАДАЧИ ОТ РУКОВОДИТЕЛЯ:\n`;
+        p.mine.forEach(t => {
+          const rep = (t.kmReport || {})[String(p.rec.id)];
+          let st2;
+          if (!kmData.ok) {
+            st2 = '— лист не загружен';
+          } else if (!rep) {
+            st2 = '▫️ нет данных о статусе';
+          } else if (rep.done) {
+            st2 = (rep.late ? DUE_GLYPH.LATE : DUE_GLYPH.ON_TIME) + ' выполнено' +
+              (rep.doneTs && rep.doneDay === dateStr ? ' в ' + formatTimeShort(rep.doneTs) : '') +
+              (rep.late ? ' (не в срок)' : '');
+          } else {
+            const parts = String(t.due || '').split(':');
+            const dueMin = parts.length === 2
+              ? (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0) : null;
+            const isToday = dateStr === todayInput();
+            const nowD = new Date();
+            const overdue = dueMin != null && (dateStr < todayInput() ||
+              (isToday && dueMin < nowD.getHours() * 60 + nowD.getMinutes()));
+            st2 = (overdue ? DUE_GLYPH.OVERDUE : DUE_GLYPH.NOT_DUE) + ' не отмечено' +
+              (overdue ? ' (просрочено)' : '');
+          }
+          report += `    ▸ [${t.due || '—'}]${t.repeat ? ' ↻' : ''} ${t.text} — ${st2}\n`;
+          if (rep && rep.note) report += `       💬 ${rep.note}\n`;
+        });
+        report += `\n`;
       }
 
       /* Записи времени КМ */
-      if (ownEntries.length > 0) {
+      if (p.ownEntries.length > 0) {
         report += `  ⏱ ЗАПИСИ ВРЕМЕНИ (самостоятельные):\n`;
-        ownEntries.slice().sort((a, b) => a.startTs - b.startTs).forEach(x => {
+        p.ownEntries.slice().sort((a, b) => a.startTs - b.startTs).forEach(x => {
           report += `    ${x.start}–${x.end} (${fmtDurShort(x.endTs - x.startTs)}) ${x.text}\n`;
           if (x.note) report += `       💬 ${x.note}\n`;
         });
@@ -4534,11 +4728,11 @@ function buildDailyReport(dateStr, kmData) {
       }
 
       /* Сессии с руководителем — детально */
-      empSessions.forEach((s, si) => {
-        const sDur = s.endTs - s.startTs;
-        report += `  🎧 Сессия ${si + 1}: ${formatTimeShort(s.startTs)} – ${formatTimeShort(s.endTs)} (${fmtDur(sDur)})\n`;
+      p.empSessions.forEach((s, si) => {
+        const endStr = s.endTs ? formatTimeShort(s.endTs) : '…';
+        const durStr = s.endTs ? ` (${fmtDur(s.endTs - s.startTs)})` : ' (не закрыта)';
+        report += `  🎧 Сессия ${si + 1}: ${formatTimeShort(s.startTs)} – ${endStr}${durStr}\n`;
         if (s.topic) report += `     Тема: ${s.topic}\n`;
-
         if (s.calls.length === 0) {
           report += `     Звонков не было\n`;
         } else {
@@ -4555,7 +4749,6 @@ function buildDailyReport(dateStr, kmData) {
             }
           });
         }
-
         if (s.notes && s.notes.trim()) {
           report += `     📝 ОС по сессии:\n`;
           splitBlocks(s.notes).forEach(line => {
@@ -4569,20 +4762,20 @@ function buildDailyReport(dateStr, kmData) {
 
       /* Рекомендованные скрипты (сводно) */
       const scripts = [];
-      empSessions.forEach(s => {
+      p.empSessions.forEach(s => {
         (s.calls || []).forEach(c => extractScripts(c.os).forEach(x => scripts.push(x)));
         extractScripts(s.notes).forEach(x => scripts.push(x));
       });
       if (scripts.length) {
         report += `  📞 Рекомендованные скрипты:\n`;
-        [...new Set(scripts)].forEach((sc, i) => { report += `    ${i+1}. ${sc}\n`; });
+        [...new Set(scripts)].forEach((sc, i) => { report += `    ${i + 1}. ${sc}\n`; });
         report += `\n`;
       }
 
       /* Личные звонки КМ */
-      if (ownCalls.length > 0) {
+      if (p.ownCalls.length > 0) {
         report += `  📞 ЛИЧНЫЕ ЗВОНКИ:\n`;
-        ownCalls.slice().sort((a, b) => a.startTs - b.startTs).forEach((c, i) => {
+        p.ownCalls.slice().sort((a, b) => a.startTs - b.startTs).forEach((c, i) => {
           const mark = c.mark === 'ok' ? '✅' : c.mark === 'fail' ? '❌' : '⚪';
           const dur = c.endTs ? fmtDurCall(c.endTs - c.startTs) : 'идёт…';
           report += `    ${String(i + 1).padStart(2)}. ${formatTimeShort(c.startTs)}` +
@@ -4595,14 +4788,12 @@ function buildDailyReport(dateStr, kmData) {
 
       /* Антифрод-сводка */
       if (d) {
-        const dayEvents = (d.events || []).filter(e => e.ts >= r.start && e.ts < r.end);
         const afRows = ['bg', 'idle', 'offline', 'logout'].map(type => {
-          const list = dayEvents.filter(e => e.type === type);
-          if (!list.length) return null;
-          return `    • ${KM_EV_LBL[type]}: ${list.length} (${list.map(e => formatTimeShort(e.ts)).join(', ')})`;
+          if (!p.anti[type]) return null;
+          const list = ((d.events || []).filter(e => e.ts >= r.start && e.ts < r.end && e.type === type));
+          return `    • ${KM_EV_LBL[type]}: ${p.anti[type]} (${list.map(e => formatTimeShort(e.ts)).join(', ')})`;
         }).filter(Boolean);
-        const alarms = dayEvents.filter(e => e.type === 'alarm');
-        if (alarms.length > 0) afRows.push(`    • Сработавшие напоминания: ${alarms.length}`);
+        if (p.alarms > 0) afRows.push(`    • Сработавшие напоминания: ${p.alarms}`);
         if (afRows.length > 0) {
           report += `  🧭 АНТИФРОД-СВОДКА:\n`;
           report += afRows.join('\n') + `\n\n`;
@@ -4610,9 +4801,9 @@ function buildDailyReport(dateStr, kmData) {
       }
 
       /* Отсутствия */
-      if (empAbs.length) {
+      if (p.empAbs.length) {
         report += `  🕓 Отсутствия:\n`;
-        empAbs.forEach(a => {
+        p.empAbs.forEach(a => {
           report += `    • ${a.start}–${a.end} (${fmtDurShort(a.endTs - a.startTs)}) — ${absLabel(a.type)}`;
           if (a.note) report += ` — ${a.note}`;
           report += `\n`;
@@ -4621,11 +4812,11 @@ function buildDailyReport(dateStr, kmData) {
       }
 
       /* Замечания + запросы */
-      if (empRemarks.length) {
+      if (p.empRemarks.length) {
         report += `  ⚠️ ЗАМЕЧАНИЯ:\n`;
-        empRemarks.forEach(r2 => { report += `    ❗ ${r2.text}\n`; });
+        p.empRemarks.forEach(r2 => { report += `    ❗ ${r2.text}\n`; });
         report += `\n`;
-        const needExpl = empRemarks.filter(r2 => r2.needExplanation);
+        const needExpl = p.empRemarks.filter(r2 => r2.needExplanation);
         if (needExpl.length) {
           report += `  ✉️ ТРЕБУЕТСЯ ОБЪЯСНИТЕЛЬНАЯ / ПОЯСНЕНИЕ (на имя НО):\n`;
           needExpl.forEach(r2 => {
@@ -4646,136 +4837,180 @@ function buildDailyReport(dateStr, kmData) {
     });
   }
 
-  /* ---- ОБЩАЯ СВОДКА ---- */
-  report += `${'='.repeat(60)}\n`;
-  report += `📌 ОБЩАЯ СВОДКА ЗА ДЕНЬ\n`;
-  report += `${'='.repeat(60)}\n`;
+  /* 6. МОЁ ВРЕМЯ */
+  report += `6️⃣ МОЁ ВРЕМЯ — ${fmtDur(m.myTotalMs)} (${m.myPct}% от ${WORK_DAY_HOURS}ч)\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (m.myItems.length === 0) {
+    report += 'Записей нет\n';
+  } else {
+    m.myItems.forEach((w, i) => {
+      const dur = fmtDurShort(w.endTs - w.startTs);
+      const syncTag = w.syncEmployeeId
+        ? `  🤝 с ${(employees.find(e => e.id === w.syncEmployeeId) || {}).name || w.syncEmployeeName || 'КМ'}`
+        : '';
+      report += `${String(i + 1).padStart(2)}. ${w.start}–${w.end} (${dur})${syncTag}\n`;
+      report += `    ${w.text}\n`;
+    });
+  }
+  report += `\n`;
+  if (m.mySyncMs > 0) {
+    report += `   ↳ из них в сессиях с КМ: ${fmtDur(m.mySyncMs)}\n`;
+    report += `   ↳ моя самостоятельная работа: ${fmtDur(m.myTotalMs - m.mySyncMs)}\n`;
+  }
+  if (m.myGaps.length > 0) {
+    const gapMs = m.myGaps.reduce((s, g) => s + (g[1] - g[0]), 0);
+    report += `\n   ⚠️ Не учтено в рабочем окне (${WORK_WINDOW_START}:00–${WORK_WINDOW_END}:00): ${fmtDur(gapMs)}\n`;
+    m.myGaps.forEach(g => {
+      report += `      ${formatTimeShort(g[0])} – ${formatTimeShort(g[1])} (${fmtDurShort(g[1] - g[0])})\n`;
+    });
+  } else if (m.myItems.length > 0) {
+    report += `\n   ✓ Весь рабочий день покрыт записями\n`;
+  }
+  report += `\n`;
 
-  const totalCallsAll = daySessions.flatMap(s => s.calls || []);
-  const okAll = totalCallsAll.filter(c => c.mark === 'ok').length;
-  const failAll = totalCallsAll.filter(c => c.mark === 'fail').length;
-  const convAll = totalCallsAll.length > 0 ? Math.round(okAll / totalCallsAll.length * 100) : 0;
-  const callMsAll = totalCallsAll.reduce((s, c) => s + (c.endTs - c.startTs), 0);
-  const dayAbsMsAll = dayAbs.reduce((s, a) => s + (a.endTs - a.startTs), 0);
-
-  report += `• Моё время всего: ${fmtDur(myTotalMs)} (${myPct}%)\n`;
-  report += `• Из них в сессиях с КМ: ${fmtDur(mySyncMs)}\n`;
-  report += `• КМ с активностью: ${activePairs.length}\n`;
-  report += `• Сессий всего: ${daySessions.length}\n`;
-  report += `• Звонков всего (в сессиях): ${totalCallsAll.length}  (✅ ${okAll}, ❌ ${failAll}, конверсия ${convAll}%)\n`;
-  report += `• Время в звонках: ${fmtDurCall(callMsAll)}\n`;
-  report += `• Отсутствий КМ: ${dayAbs.length} на ${fmtDur(dayAbsMsAll)}\n`;
-  report += `• Замечаний: ${dayAbsRemarks.length}, требуют объяснения: ${dayAbsRemarks.filter(r2 => r2.needExplanation).length}\n`;
-  report += `• Задач выполнено: ${doneOnDay.length}   • В работе: ${activeTasks.length}   • Просрочено: ${overdueTasks.length}\n`;
-  report += `• Событий в хронологии: ${timeline.length}\n`;
-
-  const recsSum = kmRecList(kmData);
-  if (recsSum.length > 0) {
-    const allChk = recsSum.flatMap(x => (x.doc && x.doc.checklist) || []);
-    const chkDone = allChk.filter(c => c.doneDay === dateStr);
-    const chkLate = chkDone.filter(chkIsLate).length;
-    const recEntries = recsSum.flatMap(x => (x.doc && x.doc.entries) || []).filter(e => e.date === dateStr && e.endTs);
-    const recEntriesMs = recEntries.reduce((s, e) => s + (e.endTs - e.startTs), 0);
-    const recCalls = recsSum.flatMap(x => (x.doc && x.doc.calls) || []).filter(c => c.date === dateStr);
-    const recComments = chkDone.filter(c => !!c.note).length +
-      recEntries.filter(e => !!e.note).length +
-      recCalls.filter(c => !!c.note).length;
-    const recEvents = recsSum.flatMap(x => (x.doc && x.doc.events) || [])
-      .filter(e => e.ts >= r.start && e.ts < r.end && ['bg', 'idle', 'offline', 'logout'].indexOf(e.type) >= 0);
-    report += `• Чеклист КМ: выполнено пунктов ${chkDone.length}` + (chkLate ? ` (не в срок ${chkLate})` : '') + `\n`;
-    report += `• Собственные записи КМ: ${recEntries.length} на ${fmtDur(recEntriesMs)}\n`;
-    report += `• Личные звонки КМ: ${recCalls.length}\n`;
-    report += `• Зафиксировано комментариев: ${recComments}\n`;
-    report += `• Событий антифрода: ${recEvents.length}\n`;
-  } else if (kmData.reason) {
-    report += `• ⚠️ Листы КМ не загружены — разделы чеклистов/комментариев неполные\n`;
+  /* 7. ХРОНОЛОГИЯ ДНЯ */
+  report += `7️⃣ ХРОНОЛОГИЯ ДНЯ` + (m.timeline.length ? ` (${m.timeline.length} интервалов/событий)` : '') + `\n`;
+  report += `${'-'.repeat(60)}\n`;
+  if (m.timeline.length === 0) {
+    report += `Событий за день нет\n\n`;
+  } else {
+    const MAX_EV = 300;
+    m.timeline.slice(0, MAX_EV).forEach(e => {
+      const d = new Date(e.ts);
+      report += `${pad(d.getHours())}:${pad(d.getMinutes())}  ${e.icon} [${e.who}] ${e.line}\n`;
+    });
+    if (m.timeline.length > MAX_EV) report += `… и ещё ${m.timeline.length - MAX_EV} событий\n`;
+    report += `\n`;
   }
 
+  /* 8. КОНТРОЛЬ ДАННЫХ */
+  report += `8️⃣ КОНТРОЛЬ ДАННЫХ\n`;
+  report += `${'-'.repeat(60)}\n`;
+  m.dataQuality.forEach(ln => { report += `• ${ln}\n`; });
+
   return report;
+}
+
+/* ---- HTML-сводка для панели отчёта (KPI + внимание + таблица) ---- */
+function renderDailyReportSummaryHTML(m) {
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const k = m.kpi;
+  const card = (label, value, sub) =>
+    `<div style="flex:1 1 140px;min-width:140px;background:#1e1e2e;border:1px solid #3f3f56;border-radius:10px;padding:10px 12px">
+       <div style="color:#a1a1aa;font-size:12px">${esc(label)}</div>
+       <div style="color:#e4e4e7;font-size:22px;font-weight:600;line-height:1.2">${esc(value)}</div>
+       <div style="color:#71717a;font-size:11px">${esc(sub || '')}</div>
+     </div>`;
+  let html = '';
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">`;
+  html += card('Активные задачи', k.active, `просрочено ${k.overdue}`);
+  html += card('Выполнено за день', k.doneToday, `поставлено ${k.createdToday}`);
+  html += card('Сессии с КМ', k.sessions, `звонков ${k.calls} · конверсия ${k.conv}%`);
+  html += card('КМ с активностью', `${k.empActive}/${k.empTotal}`, `чеклист ${k.chkDone}${k.chkLate ? ` · не в срок ${k.chkLate}` : ''}`);
+  html += card('Моё время', fmtDurShort(k.myTotalMs), `${k.myPct}% от ${WORK_DAY_HOURS}ч`);
+  html += `</div>`;
+  if (m.attention.length > 0) {
+    html += `<div style="background:#1e1e2e;border:1px solid #7f1d1d;border-left:4px solid #ef4444;border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="color:#fca5a5;font-weight:600;margin-bottom:6px">⚠ Требует внимания (${m.attention.length})</div>`;
+    m.attention.forEach((it, i) => {
+      html += `<div style="margin-bottom:6px"><b style="color:#e4e4e7">${i + 1}. ${esc(it.title)}</b>
+        <div style="color:#a1a1aa;font-size:12px;white-space:pre-wrap">${esc(it.lines.join('\n'))}</div></div>`;
+    });
+    html += `</div>`;
+  }
+  if (m.emp.allPairs.length > 0) {
+    html += `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:10px">
+      <tr style="color:#a1a1aa;text-align:left;border-bottom:1px solid #3f3f56">
+        <th style="padding:6px 8px">Сотрудник</th><th style="padding:6px 8px">Время</th>
+        <th style="padding:6px 8px">Задачи</th><th style="padding:6px 8px">Чеклист</th>
+        <th style="padding:6px 8px">Звонки</th><th style="padding:6px 8px">Конверс</th>
+        <th style="padding:6px 8px">Опозд</th></tr>`;
+    m.emp.allPairs.forEach(p => {
+      const stBadge = p.st === 'sick' ? ' 🤒' : p.st === 'vacation' ? ' 🌴' : '';
+      const td = (v, dim) => `<td style="padding:6px 8px;color:${dim ? '#71717a' : '#e4e4e7'}">${esc(v)}</td>`;
+      html += `<tr style="border-bottom:1px solid #27273a">
+        <td style="padding:6px 8px;color:#e4e4e7">${esc(p.name + stBadge)}</td>
+        ${td(p.hasData ? fmtDurShort(p.totalMs) : '—', !p.hasData)}
+        ${td(p.rec ? (p.distTotal > 0 ? `${p.distDone}/${p.distTotal}` : '—') : '—', !p.rec || p.distTotal === 0)}
+        ${td(p.rec ? (p.chkRelevant.length ? `${p.chkDoneDay.length}/${p.chkRelevant.length}` : '—') : '—', !p.rec)}
+        ${td(p.hasData ? p.allCalls.length : '—', !p.hasData)}
+        ${td(p.allCalls.length ? p.conv + '%' : '—', !p.allCalls.length)}
+        ${p.lateStart ? '<td style="padding:6px 8px;color:#fbbf24">⚠ да</td>' : td('—', true)}
+      </tr>`;
+    });
+    html += `</table></div>`;
+  }
+  html += `<details style="margin-bottom:8px"><summary style="color:#a1a1aa;cursor:pointer;font-size:13px">ℹ Как читать: Задачи — выполнено/распределено; Чеклист — пункты; «—» — нет данных за день</summary></details>`;
+  return html;
+}
+
+function buildDailyReport(dateStr, kmData) {
+  return renderDailyReportText(buildReportModel(dateStr, kmData));
 }
 
 function buildDailyCSV(dateStr, kmData) {
   kmData = kmData || kmDataEmpty();
   const r = dayRangeMs(dateStr);
+  const m = buildReportModel(dateStr, kmData);
   const rows = [];
 
   // Срез дня
-  const pulseItems = (dailyPulse[dateStr] || []).filter(it => it.label || it.plan || it.fact);
+  const pulseItems = m.pulseItems;
   if (pulseItems.length > 0) {
     rows.push(['=== СРЕЗ ДНЯ ===']);
     rows.push(['Название', 'План', 'Факт', '%']);
-    let planSum = 0, factSum = 0, hasPlan = false, hasFact = false;
     pulseItems.forEach(it => {
       const p = parseFloat(String(it.plan || '').replace(',', '.'));
       const f = parseFloat(String(it.fact || '').replace(',', '.'));
-      if (!isNaN(p)) { planSum += p; hasPlan = true; }
-      if (!isNaN(f)) { factSum += f; hasFact = true; }
       const pctItem = (!isNaN(p) && !isNaN(f) && p > 0) ? Math.round(f / p * 100) + '%' : '';
       rows.push([it.label, it.plan || '', it.fact || '', pctItem]);
     });
-    const pctTotal = planSum > 0 ? Math.round(factSum / planSum * 100) + '%' : '';
-    rows.push(['ИТОГО', hasPlan ? planSum : '', hasFact ? factSum : '', pctTotal]);
+    const pctTotal = m.hasPlan && m.planSum > 0 ? Math.round(m.factSum / m.planSum * 100) + '%' : '';
+    rows.push(['ИТОГО', m.hasPlan ? m.planSum : '', m.hasFact ? m.factSum : '', pctTotal]);
     rows.push([]);
   }
 
-  // Планы и распределённые задачи
+  // Требует внимания
+  if (m.attention.length > 0) {
+    rows.push(['=== ТРЕБУЕТ ВНИМАНИЯ ===']);
+    rows.push(['№', 'Проблема', 'Детали']);
+    m.attention.forEach((it, i) => {
+      rows.push([i + 1, it.title, it.lines.join(' | ')]);
+    });
+    rows.push([]);
+  }
+
+  // Планы и распределённые задачи (сводно по задаче; статусы КМ — в разделах сотрудников)
   const distTasks = kmTaskList(kmData);
   const dayStartMs = r.start, dayEndMs = r.end;
   const planToday = tasks.filter(t => !t.done && t.deadline && t.deadline >= dayStartMs && t.deadline < dayEndMs);
   if (planToday.length > 0 || distTasks.length > 0) {
     rows.push(['=== ПЛАНЫ И ПРОГНОЗЫ ===']);
-    rows.push(['Источник', 'Задача', 'Дедлайн/повтор', 'КМ', 'Статус', 'Комментарий']);
+    rows.push(['Источник', 'Задача', 'Дедлайн/повтор', 'Выполнено', 'Детали']);
     [...planToday].sort((a, b) => a.deadline - b.deadline).forEach(t => {
       rows.push(['моя', t.text,
         formatTimeShort(t.deadline) + (t.repeat ? ' (' + (REPEAT_LBL[t.repeat] || t.repeat) + ')' : ''),
-        '', t.done ? 'выполнено' : 'план на день', '']);
+        t.done ? 'да' : 'план на день', '']);
     });
-    const recs = kmRecList(kmData);
-    distTasks.forEach(t => {
-      const ids = t.kmIds === 'all' ? recs.map(x => x.id) : (Array.isArray(t.kmIds) ? t.kmIds : []);
+    m.distStats.forEach(ds => {
+      const t = ds.t;
       const rl = (t.due || '—') + (t.repeat ? ' (повтор)' : '');
-      if (ids.length === 0) {
-        rows.push(['распределённая', t.text, rl, '', 'листы КМ не загружены', '']);
-      }
-      ids.forEach(id => {
-        const rec = kmRecById(kmData, id);
-        const nm = rec ? rec.name : String(id).slice(0, 6);
-        const rep = (t.kmReport || {})[String(id)];
-        let st = 'не отмечено', note = '';
-        if (rep) {
-          st = rep.done
-            ? ('выполнено' + (rep.doneDay ? ' ' + rep.doneDay : '') + (rep.doneTs ? ' ' + formatTimeShort(rep.doneTs) : ''))
-            : 'не выполнено';
-          if (rep.late) st += ' (не в срок)';
-          note = rep.note || '';
-        }
-        rows.push(['распределённая', t.text, rl, nm, st, note]);
-      });
-    });
-    rows.push([]);
-  }
-
-  // Хронология
-  const timeline = buildDayTimeline(dateStr, kmData);
-  if (timeline.length > 0) {
-    rows.push(['=== ХРОНОЛОГИЯ ДНЯ ===']);
-    rows.push(['Время', 'Кто', 'Событие']);
-    timeline.forEach(e => {
-      const d = new Date(e.ts);
-      rows.push([pad(d.getHours()) + ':' + pad(d.getMinutes()), e.who, e.icon + ' ' + e.line]);
+      const cnt = kmRecList(kmData).length > 0 ? `${ds.doneN} из ${ds.total}` : 'листы КМ не загружены';
+      rows.push(['распределённая', t.text, rl, cnt,
+        (ds.lateN ? 'не в срок: ' + ds.lateN + '; ' : '') + (ds.notesN ? 'комментариев: ' + ds.notesN : '')]);
     });
     rows.push([]);
   }
 
   // Задачи
-  const doneOnDay = tasks.filter(t => t.done && t.doneAt && t.doneAt >= dayStartMs && t.doneAt < dayEndMs);
-  const createdOnDay = tasks.filter(t => t.created >= dayStartMs && t.created < dayEndMs);
-  const activeTasks = tasks.filter(t => !t.done);
-
+  const doneOnDay = m.doneOnDay;
+  const createdOnDay = m.createdOnDay;
+  const activeTasks = m.activeTasks;
   if (doneOnDay.length > 0 || createdOnDay.length > 0 || activeTasks.length > 0) {
     rows.push(['=== ЗАДАЧИ ===']);
     rows.push(['Статус', 'Текст', 'Срок', 'Выполнено в', 'Итог']);
-    doneOnDay.sort((a,b) => a.doneAt - b.doneAt).forEach(t => {
+    doneOnDay.sort((a, b) => a.doneAt - b.doneAt).forEach(t => {
       rows.push(['выполнено', t.text,
         t.deadline ? formatDate(new Date(t.deadline)) : '',
         formatDate(new Date(t.doneAt)), t.result || '']);
@@ -4796,41 +5031,32 @@ function buildDailyCSV(dateStr, kmData) {
   // Моё время
   rows.push(['=== МОЁ ВРЕМЯ ===']);
   rows.push(['Начало', 'Конец', 'Длительность (мин)', 'Синхрон с КМ', 'Текст']);
-  const myItems = workLog
-    .filter(w => w.date === dateStr && w.endTs)
-    .sort((a, b) => a.startTs - b.startTs);
-  myItems.forEach(w => {
+  m.myItems.forEach(w => {
     const syncName = w.syncEmployeeId
       ? ((employees.find(e => e.id === w.syncEmployeeId) || {}).name || w.syncEmployeeName || '')
       : '';
-    rows.push([
-      w.start, w.end,
-      Math.round((w.endTs - w.startTs) / 60000),
-      syncName, w.text
-    ]);
+    rows.push([w.start, w.end, Math.round((w.endTs - w.startTs) / 60000), syncName, w.text]);
   });
   rows.push([]);
 
   // Сессии
-  const daySessions = sessions.filter(s => s.startTs >= r.start && s.startTs < r.end);
-
+  const daySessions = m.emp.daySessions;
   if (daySessions.length > 0) {
     rows.push(['=== СЕССИИ С КМ ===']);
     rows.push(['КМ', 'Тема сессии', 'Начало сессии', 'Конец сессии', '№ звонка',
       'Начало звонка', 'Конец звонка', 'Длит. (сек)', 'Метка', 'ОС звонка', 'ОС сессии']);
-
-    daySessions.sort((a, b) => a.startTs - b.startTs).forEach(s => {
+    daySessions.slice().sort((a, b) => a.startTs - b.startTs).forEach(s => {
       const emp = employees.find(e => e.id === s.employeeId);
       const empName = emp ? emp.name : '(удалён)';
       if (s.calls.length === 0) {
-        rows.push([empName, s.topic || '', formatTime(s.startTs), formatTime(s.endTs),
+        rows.push([empName, s.topic || '', formatTime(s.startTs), s.endTs ? formatTime(s.endTs) : '',
           '', '', '', '', '', '', s.notes || '']);
       } else {
         s.calls.forEach((c, i) => {
           const mark = c.mark === 'ok' ? 'есть диалог' : c.mark === 'fail' ? 'отказ/другое' : '';
           rows.push([
             empName, s.topic || '',
-            formatTime(s.startTs), formatTime(s.endTs),
+            formatTime(s.startTs), s.endTs ? formatTime(s.endTs) : '',
             i + 1,
             formatTime(c.startTs), formatTime(c.endTs),
             Math.round((c.endTs - c.startTs) / 1000),
@@ -4925,7 +5151,7 @@ function buildDailyCSV(dateStr, kmData) {
   }
 
   // Отсутствия и замечания
-  const dayAbsCSV = empAbsences.filter(a => a.date === dateStr).sort((a, b) => a.startTs - b.startTs);
+  const dayAbsCSV = m.emp.dayAbs;
   if (dayAbsCSV.length > 0) {
     rows.push(['=== ОТСУТСТВИЯ КМ ===']);
     rows.push(['КМ', 'Тип', 'С', 'По', 'Длит. (мин)', 'Причина', 'Замечание']);
@@ -4941,7 +5167,7 @@ function buildDailyCSV(dateStr, kmData) {
         remarks
       ]);
     });
-    const dayRemarks = collectAbsenceRemarks(dayAbsCSV);
+    const dayRemarks = m.emp.dayAbsRemarks;
     if (dayRemarks.some(rm => rm.needExplanation)) {
       rows.push([]);
       rows.push(['=== ТРЕБУЕТСЯ ОБЪЯСНИТЕЛЬНАЯ / ПОЯСНЕНИЕ ===']);
@@ -4959,6 +5185,23 @@ function buildDailyCSV(dateStr, kmData) {
     }
     rows.push([]);
   }
+
+  // Хронология (в конце — технический журнал)
+  if (m.timeline.length > 0) {
+    rows.push(['=== ХРОНОЛОГИЯ ДНЯ ===']);
+    rows.push(['Время', 'Кто', 'Событие']);
+    m.timeline.forEach(e => {
+      const d = new Date(e.ts);
+      rows.push([pad(d.getHours()) + ':' + pad(d.getMinutes()), e.who, e.icon + ' ' + e.line]);
+    });
+    rows.push([]);
+  }
+
+  // Контроль данных
+  rows.push(['=== КОНТРОЛЬ ДАННЫХ ===']);
+  rows.push(['Проверка']);
+  m.dataQuality.forEach(ln => rows.push([ln]));
+  rows.push([]);
 
   return rows.map(r2 => r2.map(cell => {
     const v = String(cell == null ? '' : cell);
@@ -4985,9 +5228,15 @@ async function generateDailyReport(dateStr) {
   } else {
     kmData = { ok: false, reason: 'загрузчик листов КМ недоступен', records: [], tasks: [] };
   }
-  const txt = buildDailyReport(dateStr, kmData);
+  const model = buildReportModel(dateStr, kmData);
+  const txt = renderDailyReportText(model);
   lastReportCache = { dateStr: dateStr, kmData: kmData };
   if (ta) ta.value = txt;
+  const sumEl = document.getElementById('reportSummary');
+  if (sumEl) {
+    try { sumEl.innerHTML = renderDailyReportSummaryHTML(model); }
+    catch (e) { sumEl.innerHTML = ''; }
+  }
   return txt;
 }
 
