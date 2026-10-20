@@ -124,14 +124,15 @@
   .tabs {
     display: flex; gap: 4px; margin-bottom: 16px;
     background: #2a2a3c; padding: 4px; border-radius: 10px;
-    position: sticky; top: 0; z-index: 100;
   }
   .tabs button {
     flex: 1; background: transparent; color: #a1a1aa; border: none;
     padding: 10px; border-radius: 8px; font-size: 14px; cursor: pointer;
     font-weight: 500; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
   }
   .tabs button.active { background: #6366f1; color: white; }
+  .tab-ico { font-size: 16px; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
@@ -1028,13 +1029,53 @@
   .km-btn:disabled, .km-primary:disabled, .km-plus:disabled { opacity: .6; cursor: progress; }
   .km-save-ok { color: var(--green); }
 
+  /* --- v41: нижняя навигация и меню настроек --- */
+  .hbtn-lbl { font-size: 13px; font-weight: 500; }
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    margin: 0; border-radius: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    gap: 6px; z-index: 300; border: none; border-top: 1px solid var(--border-soft);
+    background: rgba(30,30,46,.96); backdrop-filter: blur(12px);
+    box-shadow: 0 -6px 20px rgba(0,0,0,.35);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    flex: 1 0 auto; flex-direction: column; gap: 2px; padding: 8px 6px;
+    font-size: 11px; min-width: 62px; border-radius: var(--r-sm);
+    color: var(--text-faint);
+  }
+  .tabs button .tab-ico { font-size: 20px; line-height: 1; }
+  .tabs button .tab-lbl { white-space: nowrap; }
+  .tabs button:hover { background: var(--surface-3); color: var(--text); }
+  .tabs button.active { background: var(--accent); color: #fff; }
+  body { padding-bottom: 84px; }
+
+  .settings-wrap { position: relative; }
+  .settings-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 8px);
+    background: var(--surface-2); border: 1px solid var(--border-soft);
+    border-radius: var(--r-md); box-shadow: var(--sh-lg);
+    padding: 6px; z-index: 400; min-width: 250px; text-align: left;
+  }
+  .settings-menu.open { display: block; }
+  .settings-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0;
+    height: auto; padding: 10px 12px; font-size: 14px; justify-content: flex-start;
+    background: transparent; text-align: left; color: var(--text);
+  }
+  .settings-menu button:hover { background: var(--surface-3); }
+  .settings-status { padding: 8px 12px; font-size: 12px; color: var(--text-faint);
+    border-top: 1px solid var(--border-soft); margin-top: 4px; }
+  .settings-status.ok { color: var(--green); }
+  .settings-status.warn { color: var(--amber); }
+
   /* --- Адаптив: ничего не выходит за экран --- */
   @media (max-width: 640px) {
-    body { padding: 14px; }
+    body { padding: 14px; padding-bottom: 84px; }
     .header h1 { font-size: 24px; }
-    .tabs { overflow-x: auto; scrollbar-width: none; }
-    .tabs::-webkit-scrollbar { display: none; }
-    .tabs button { flex: 0 0 auto; padding: 9px 12px; white-space: nowrap; }
+    .hbtn-lbl { display: none; }
+    .settings-menu { min-width: 210px; }
     .km-body { padding: 14px; }
     .km-timer-clock { font-size: 36px; }
     .km-modal, .os-picker-box { max-height: 90vh; max-height: 90dvh; padding: 18px; }
@@ -1057,28 +1098,26 @@
   <div class="header">
     <h1>Задачник</h1>
     <div class="header-actions">
-      <button id="exportBtn" title="Экспорт JSON" aria-label="Экспорт">📦</button>
-      <button id="importBtn" title="Импорт JSON" aria-label="Импорт">📥</button>
-      <button id="linkAutosaveBtn" title="Автосохранение в файл" aria-label="Автосохранение">🔗</button>
-      <button id="syncBtn" title="Синхронизация (GitHub Gist)" aria-label="Синхронизация">☁</button>
-      <button class="accent" id="dailyReportBtn" title="Итог дня" aria-label="Итог дня" style="background:#22c55e">📊</button>
-      <button class="accent" id="addEmpBtn" title="Добавить КМ" aria-label="Добавить КМ">+</button>
-      <button class="warn" id="delEmpBtn" title="Удалить КМ" aria-label="Удалить КМ" disabled>🗑</button>
+      <button class="accent" id="dailyReportBtn" title="Итог дня" aria-label="Итог дня" style="background:#22c55e">📊 <span class="hbtn-lbl">Отчёт</span></button>
+      <div class="settings-wrap">
+        <button id="settingsBtn" title="Настройки, данные и синхронизация" aria-label="Настройки">⚙ <span class="hbtn-lbl">Ещё</span></button>
+        <div class="settings-menu" id="settingsMenu">
+          <button id="exportBtn">📦 <span>Экспорт (бэкап в файл)</span></button>
+          <button id="importBtn">📥 <span>Импорт из файла</span></button>
+          <button id="linkAutosaveBtn">🔗 <span>Автосохранение в файл</span></button>
+          <button id="syncBtn">☁ <span>Синхронизация (GitHub Gist)</span></button>
+          <div class="settings-status" id="settingsCloudStatus"></div>
+        </div>
+      </div>
       <input type="file" id="importFile" accept=".json" style="display:none">
     </div>
   </div>
 
-  <div class="backup-banner" id="backupBanner">
-    <span class="txt" id="backupBannerText">⚠️ Давно не делал бэкап</span>
-    <button id="bannerExportBtn">📦 Экспорт сейчас</button>
-    <button class="close" id="bannerClose">✕</button>
-  </div>
-
   <div class="tabs">
-    <button data-tab="tasks" class="active">📋 Задачи</button>
-    <button data-tab="time">⏱ Моё время</button>
-    <button data-tab="team">👥 Сотрудники</button>
-    <button data-tab="pulse">📊 Срез</button>
+    <button data-tab="tasks" class="active"><span class="tab-ico">📋</span><span class="tab-lbl">Задачи</span></button>
+    <button data-tab="time"><span class="tab-ico">⏱</span><span class="tab-lbl">Моё время</span></button>
+    <button data-tab="team"><span class="tab-ico">👥</span><span class="tab-lbl">Сотрудники</span></button>
+    <button data-tab="pulse"><span class="tab-ico">📊</span><span class="tab-lbl">Срез</span></button>
   </div>
 
   <div class="tab-panel active" id="panel-tasks">
@@ -1533,7 +1572,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 40,
+    version: 41,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -1600,14 +1639,13 @@ document.querySelectorAll('.tabs button').forEach(btn => {
 function updateTopButtons() {
   const activeTabBtn = document.querySelector('.tabs button.active');
   if (!activeTabBtn) return;
-  const isTeam = activeTabBtn.dataset.tab === 'team';
   const addBtn = document.getElementById('addEmpBtn');
   const delBtn = document.getElementById('delEmpBtn');
-  if (addBtn) addBtn.disabled = !isTeam;
-  if (delBtn) delBtn.disabled = !(isTeam && activeEmpCard !== null);
+  if (addBtn) addBtn.disabled = activeTabBtn.dataset.tab !== 'team';
+  if (delBtn) delBtn.disabled = !(activeTabBtn.dataset.tab === 'team' && activeEmpCard !== null);
 }
 
-document.getElementById('addEmpBtn').onclick = () => {
+function openAddEmpModal() {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px';
   wrap.innerHTML = `<div style="background:#2a2a3c;padding:20px;border-radius:12px;max-width:380px;width:100%;color:#e4e4e7">
@@ -1636,9 +1674,9 @@ document.getElementById('addEmpBtn').onclick = () => {
   wrap.querySelector('#empCancel').onclick = () => wrap.remove();
   wrap.querySelector('#empSave').onclick = doAdd;
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
-};
+}
 
-document.getElementById('delEmpBtn').onclick = () => {
+function deleteActiveEmp() {
   if (activeEmpCard === null) return;
   const emp = employees.find(e => e.id === activeEmpCard);
   if (!emp) return;
@@ -1650,7 +1688,7 @@ document.getElementById('delEmpBtn').onclick = () => {
     renderTeam();
     updateTopButtons();
   }
-};
+}
 
 /* ============================================================
    ЗАДАЧИ
@@ -4458,6 +4496,23 @@ function showDailyReport(dateStr) {
 /* ============================================================
    ЭКСПОРТ / ИМПОРТ
 ============================================================ */
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsMenu = document.getElementById('settingsMenu');
+if (settingsBtn && settingsMenu) {
+  settingsBtn.onclick = (e) => {
+    e.stopPropagation();
+    settingsMenu.classList.toggle('open');
+    if (settingsMenu.classList.contains('open')) updateCloudStatus();
+  };
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest || !e.target.closest('.settings-wrap')) settingsMenu.classList.remove('open');
+  });
+  settingsMenu.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('button') && e.target.id !== 'syncBtn') {
+      settingsMenu.classList.remove('open');
+    }
+  });
+}
 document.getElementById('exportBtn').onclick = () => {
   const data = buildExportData();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -4756,11 +4811,24 @@ function updateBackupBanner() {
     banner.classList.remove('show');
   }
 }
-document.getElementById('bannerExportBtn').onclick = () => document.getElementById('exportBtn').click();
-document.getElementById('bannerClose').onclick = () => {
+const _bExport = document.getElementById('bannerExportBtn');
+if (_bExport) _bExport.onclick = () => document.getElementById('exportBtn').click();
+const _bClose = document.getElementById('bannerClose');
+if (_bClose) _bClose.onclick = () => {
   document.getElementById('backupBanner').classList.remove('show');
   setTimeout(updateBackupBanner, 3600000);
 };
+function updateCloudStatus() {
+  const box = document.getElementById('settingsCloudStatus');
+  if (!box) return;
+  if (syncState.enabled && syncState.token && syncState.gistId) {
+    box.className = 'settings-status ok';
+    box.textContent = '☁ Облако подключено' + (syncState.login ? ' · ' + syncState.login : '') + ' — данные сохраняются онлайн';
+  } else {
+    box.className = 'settings-status warn';
+    box.textContent = '⚠ Облако не подключено — сделайте бэкап (Экспорт) или включите синхронизацию';
+  }
+}
 
 window.addEventListener('pagehide', () => {
   flushSave();
@@ -4772,6 +4840,7 @@ window.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('beforeunload', (e) => {
   flushSave();
+  if (syncState.enabled && syncState.token && syncState.gistId) return;
   const lastExport = meta.lastExport || 0;
   const daysSince = (Date.now() - lastExport) / 86400000;
   const hasData = tasks.length > 0 || workLog.length > 0;
@@ -6435,8 +6504,7 @@ newText.focus();
       '<div class="km-task-item' + (r.id === KM._editTaskId ? ' km-task-editing' : '') + '">' +
         '<span class="km-rem-time">' + esc(r.due || '09:00') + '</span>' +
         '<span class="km-rem-text">' + esc(r.text) + '</span>' +
-        (r.due ? '<span class="km-task-due">до ' + esc(r.due) + '</span>' : '') +
-        (r.repeat ? '<span class="km-task-rep">ежедневно</span>' : '') +
+        (r.repeat ? '<span class="km-task-rep">↻ ежедневно</span>' : '') +
         '<span class="km-rem-who">' + esc(targetsShort(r.kmIds)) + '</span>' +
         '<button class="km-icon" data-edittask="' + esc(r.id) + '" title="Изменить">✏️</button>' +
         '<button class="km-del" data-deltask="' + esc(r.id) + '">✕</button>' +
@@ -6639,13 +6707,14 @@ newText.focus();
   function hideAdminApp() {
     const c = document.querySelector('.container');
     if (c) c.style.display = 'none';
+    document.body.style.paddingBottom = '0';
     const st = el('autosaveStatus'); if (st) st.style.display = 'none';
   }
 
   function kmAdminTabButton() {
     const tabs = document.querySelector('.tabs');
     if (!tabs || tabs.querySelector('[data-tab="km"]')) return;
-    const b = ce('button', '', '🛰 КМ');
+    const b = ce('button', '', '<span class="tab-ico">🛰</span><span class="tab-lbl">КМ</span>');
     b.setAttribute('data-tab', 'km');
     tabs.appendChild(b);
   }
