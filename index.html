@@ -1153,6 +1153,7 @@
 <div class="container">
   <div class="header">
     <h1>Задачник</h1>
+    <button id="cacheResetBtn" title="Очистить кэш и перезагрузить" style="background:none;border:1px solid #3f3f56;color:#71717a;padding:2px 8px;border-radius:6px;cursor:pointer;font-size:11px;margin-left:6px">🧹</button>
     <div class="autosave-status" id="autosaveStatus">
       <span class="dot"></span>
       <span id="autosaveText">автосохранение</span>
@@ -1654,7 +1655,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 46,
+    version: 47,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -5971,6 +5972,19 @@ if (activeTimer) timerTickId = setInterval(updateTimerDisplay, 1000);
 if (activeEmpTimer) empTimerTickId = setInterval(updateEmpTimerDisplay, 1000);
 updateTimerDisplay();
 updateEmpTimerDisplay();
+
+document.getElementById('cacheResetBtn').onclick = async () => {
+  if (!confirm('Очистить кэш и перезагрузить приложение?')) return;
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch (e) {}
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+  } catch (e) {}
+  location.reload();
+};
 
 newText.focus();
 </script>
