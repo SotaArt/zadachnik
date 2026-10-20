@@ -1023,6 +1023,10 @@
   .km-status-select { padding: 4px 8px; font-size: 12px; border-radius: 8px; }
   .km-away-note { background: rgba(251,113,133,.1); border: 1px solid rgba(251,113,133,.35);
     color: #fecaca; border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+  .km-spin { display: inline-block; animation: kmSpin 1s linear infinite; }
+  @keyframes kmSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .km-btn:disabled, .km-primary:disabled, .km-plus:disabled { opacity: .6; cursor: progress; }
+  .km-save-ok { color: var(--green); }
 
   /* --- Адаптив: ничего не выходит за экран --- */
   @media (max-width: 640px) {
@@ -1529,7 +1533,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 39,
+    version: 40,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse
   };
@@ -4987,10 +4991,16 @@ newText.focus();
 
   /* ============ GitHub Gist layer ============ */
   function ghH() { return { Authorization: 'Bearer ' + KM.cfg.token, Accept: 'application/vnd.github+json' }; }
-  async function gistGet() {
+  async function gistGet(force) {
+    const now = Date.now();
+    if (!force && KM._gistCache && KM._gistCache.data && (now - KM._gistCache.ts) < 2000) {
+      return KM._gistCache.data;
+    }
     const res = await fetch('https://api.github.com/gists/' + KM.cfg.gistId, { headers: ghH() });
     if (!res.ok) throw new Error('Gist ' + res.status);
-    return res.json();
+    const data = await res.json();
+    KM._gistCache = { data: data, ts: now };
+    return data;
   }
   async function gistPatch(files) {
     const res = await fetch('https://api.github.com/gists/' + KM.cfg.gistId, {
@@ -5002,7 +5012,9 @@ newText.focus();
       const t = await res.text();
       throw new Error('Gist ' + res.status + ': ' + t.slice(0, 140));
     }
-    return res.json();
+    const data = await res.json();
+    KM._gistCache = { data: data, ts: Date.now() };
+    return data;
   }
   function kmFileName(id) { return 'km_' + id + '.json'; }
   function parseFiles(g) {
@@ -5211,10 +5223,10 @@ newText.focus();
         '<h2>Вход в кабинет КМ</h2>' +
         '<p class="km-muted">Выберите себя и введите ПИН-код</p>' +
         '<label>Кто вы</label>' +
-        '<select id="kmPick" class="km-input"><option value="">— загрузка списка… —</option></select>' +
+        '<select id="kmPick" class="km-input" disabled><option value="">⏳ загрузка списка сотрудников…</option></select>' +
         '<label>ПИН-код</label>' +
         '<input id="kmPin" class="km-input" type="password" inputmode="numeric" autocomplete="off" placeholder="••••">' +
-        '<button class="km-primary" id="kmLoginBtn">Войти</button>' +
+        '<button class="km-primary" id="kmLoginBtn" disabled>⏳ Загрузка…</button>' +
         '<div class="km-err" id="kmErr"></div>' +
       '</div>';
     el('kmLoginBtn').onclick = kmDoLogin;
@@ -5231,12 +5243,15 @@ newText.focus();
     }
     try {
       KM.roster = await rosterList();
+      pick.disabled = false;
       pick.innerHTML = '<option value="">— выберите себя —</option>' +
         KM.roster.map(r => '<option value="' + esc(r.km_id) + '">' + esc(r.name) + '</option>').join('');
       if (preId) pick.value = preId;
+      const btn = el('kmLoginBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Войти'; }
     } catch (e) {
       pick.innerHTML = '<option value="">— ошибка загрузки —</option>';
-      el('kmErr').textContent = e.message;
+      const btn = el('kmLoginBtn'); if (btn) { btn.textContent = 'Повторить загрузку'; btn.disabled = false; btn.onclick = () => loadRosterIntoPicker(preId); }
+      el('kmErr').textContent = e.message + ' — нажмите «Повторить загрузку»';
     }
   }
 
@@ -5247,12 +5262,15 @@ newText.focus();
     err.textContent = '';
     if (!kmId) { err.textContent = 'Выберите себя из списка'; return; }
     if (!pin) { err.textContent = 'Введите ПИН-код'; return; }
+    const btn = el('kmLoginBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Вход…'; }
+    const restore = () => { if (btn) { btn.disabled = false; btn.textContent = 'Войти'; } };
     try {
       const rec = await kmGet(kmId);
-      if (!rec) { err.textContent = 'КМ не найден'; return; }
+      if (!rec) { err.textContent = 'КМ не найден'; restore(); return; }
       const h = await pinHash(kmId, pin);
-      if (rec.pinHash) { if (rec.pinHash !== h) { err.textContent = 'Неверный ПИН-код'; return; } }
-      else if (rec.pin !== pin) { err.textContent = 'Неверный ПИН-код'; return; }
+      if (rec.pinHash) { if (rec.pinHash !== h) { err.textContent = 'Неверный ПИН-код'; restore(); return; } }
+      else if (rec.pin !== pin) { err.textContent = 'Неверный ПИН-код'; restore(); return; }
       KM.kmId = kmId;
       KM.name = rec.name;
       KM.pin = rec.pin || pin;
@@ -5266,7 +5284,7 @@ newText.focus();
       kmFetchReminders();
       kmShowSheet();
       kmPushSoon();
-    } catch (e) { err.textContent = e.message; }
+    } catch (e) { err.textContent = e.message; restore(); }
   }
 
   async function kmAutoLogin(kmId) {
@@ -6209,6 +6227,7 @@ newText.focus();
   }
 
   async function adminAddKm() {
+    if (KM._savingKm) return;
     const name = el('kmNewName').value.trim();
     const pin = el('kmNewPin').value.trim();
     const msg = el('kmAddMsg');
@@ -6216,17 +6235,24 @@ newText.focus();
     if (!/^\d{4,6}$/.test(pin)) { msg.textContent = 'ПИН — 4–6 цифр'; return; }
     if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
     const kmId = uid();
+    const btn = el('kmAddKmBtn');
+    KM._savingKm = true;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    msg.innerHTML = '<span class="km-spin">⏳</span> Добавляю…';
     try {
       const h = await pinHash(kmId, pin);
-      await kmPut({ id: kmId, name: name, pin: pin, pinHash: h, doc: emptyDoc() });
+      await kmPut({ id: kmId, name: name, pin: pin, pinHash: h, status: 'work', doc: emptyDoc() });
+      KM._gistCache = null;
       el('kmNewName').value = ''; el('kmNewPin').value = '';
-      msg.textContent = 'Добавлен: ' + name;
-      await syncRosterToEmployees();
-      kmRenderAdmin(true);
-    } catch (e) { msg.textContent = e.message; }
+      msg.innerHTML = '✅ Добавлен: ' + esc(name);
+      syncRosterToEmployees().then(() => kmRenderAdmin(true)).catch(() => kmRenderAdmin(true));
+    } catch (e) { msg.textContent = '⚠ ' + e.message; }
+    KM._savingKm = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Добавить'; }
   }
 
   async function adminAssignTask() {
+    if (KM._savingTask) return;
     const text = el('kmAdminTaskText').value.trim();
     const due = el('kmAdminTaskDue').value || '';
     const repeat = !!(el('kmAdminTaskRepeat') && el('kmAdminTaskRepeat').checked);
@@ -6237,26 +6263,53 @@ newText.focus();
     if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
     const ids = sel === 'all' ? KM.adminRows.map(r => r.id) : sel;
     if (!ids.length) { msg.textContent = 'Нет КМ в списке'; return; }
-    msg.textContent = 'Сохранение…';
+
+    const btn = el('kmAdminTaskBtn');
+    const editing = !!KM._editTaskId;
+    KM._savingTask = true;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохранение…'; }
+    msg.innerHTML = '<span class="km-spin">⏳</span> Сохраняю задачу…';
+
+    const editId = KM._editTaskId;
+    let list;
     try {
-      const list = await tasksGet() || [];
-      if (KM._editTaskId) {
-        const it = list.find(x => x.id === KM._editTaskId);
+      list = await tasksGet() || [];
+      if (editId) {
+        const it = list.find(x => x.id === editId);
         if (it) { it.text = text; it.due = due; it.repeat = repeat; it.kmIds = sel; }
-        KM._editTaskId = null;
       } else {
         list.unshift({ id: uid(), text: text, due: due, repeat: repeat, kmIds: sel, created: Date.now() });
       }
       await tasksPut(list);
-      await adminPushChecklists(list, ids);
-      el('kmAdminTaskText').value = '';
-      el('kmAdminTaskDue').value = '';
-      if (el('kmAdminTaskRepeat')) el('kmAdminTaskRepeat').checked = false;
-      el('kmAdminTaskBtn').textContent = 'Назначить';
-      el('kmAdminTaskClear').style.display = 'none';
-      msg.textContent = 'Сохранено «' + text + '» → ' + targetNames(sel);
-      kmRenderAdmin(true);
-    } catch (e) { msg.textContent = e.message; }
+    } catch (e) {
+      KM._savingTask = false;
+      if (btn) { btn.disabled = false; btn.textContent = editing ? 'Сохранить' : 'Назначить'; }
+      msg.textContent = '⚠ ' + e.message;
+      return;
+    }
+
+    KM.adminTasks = list.slice();
+    KM._editTaskId = null;
+    el('kmAdminTaskText').value = '';
+    el('kmAdminTaskDue').value = '';
+    if (el('kmAdminTaskRepeat')) el('kmAdminTaskRepeat').checked = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Назначить'; }
+    el('kmAdminTaskClear').style.display = 'none';
+    renderAdminTaskList();
+
+    KM._savingTask = false;
+    msg.innerHTML = '✅ Сохранено «' + esc(text) + '» → ' + esc(targetNames(sel)) +
+      '<span class="km-muted" id="kmPushStatus"> · рассылка КМ…</span>';
+
+    adminPushChecklists(list, ids).then(async () => {
+      const st = el('kmPushStatus');
+      if (st) st.textContent = ' · доставлено ' + ids.length + ' КМ';
+      try { await syncRosterToEmployees(); } catch (e) {}
+      KM._gistCache = null;
+    }).catch(() => {
+      const st = el('kmPushStatus');
+      if (st) st.textContent = ' · рассылка повторится позже';
+    });
   }
 
   async function adminPushChecklists(list, ids) {
@@ -6304,6 +6357,7 @@ newText.focus();
   }
 
   async function adminAddReminder() {
+    if (KM._savingRem) return;
     const time = el('kmRemTime').value;
     const text = el('kmRemText').value.trim();
     const repeat = !!(el('kmRemRepeat') && el('kmRemRepeat').checked);
@@ -6312,15 +6366,23 @@ newText.focus();
     if (!time || !text) { msg.textContent = 'Укажите время и текст'; return; }
     if (!sel.length) { msg.textContent = 'Выберите кому напоминать'; return; }
     if (!cfgReady()) { msg.textContent = 'Сначала настройте облако (⚙)'; return; }
+    const btn = el('kmRemAddBtn');
+    KM._savingRem = true;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Сохранение…'; }
+    msg.innerHTML = '<span class="km-spin">⏳</span> Сохраняю напоминание…';
     try {
       const list = await remindersGet();
       list.push({ id: uid(), time: time, text: text, kmIds: sel, repeat: repeat, created: Date.now() });
       await remindersPut(list);
+      KM.reminders = list.slice();
+      KM._gistCache = null;
       el('kmRemText').value = '';
       if (el('kmRemRepeat')) el('kmRemRepeat').checked = false;
-      msg.textContent = 'Добавлено: ' + time + ' — ' + text + (repeat ? ' (каждый день)' : ' (разово)') + ' → ' + targetNames(sel);
-      kmRenderAdmin(true);
-    } catch (e) { msg.textContent = e.message; }
+      renderAdminRemList();
+      msg.innerHTML = '✅ Добавлено: ' + esc(time) + ' — ' + esc(text) + (repeat ? ' (каждый день)' : ' (разово)') + ' → ' + esc(targetNames(sel));
+    } catch (e) { msg.textContent = '⚠ ' + e.message; }
+    KM._savingRem = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Добавить'; }
   }
 
   async function adminDelReminder(remId) {
@@ -6359,6 +6421,42 @@ newText.focus();
     } catch (e) { alert(e.message); }
   }
 
+  function renderAdminTaskList() {
+    const box = el('kmTaskAdminList');
+    if (!box) return;
+    const tks = Array.isArray(KM.adminTasks) ? KM.adminTasks : [];
+    const sorted = tks.slice().sort((a, b) => {
+      const ka = a.due ? String(a.due) : '09:00';
+      const kb = b.due ? String(b.due) : '09:00';
+      if (ka !== kb) return ka.localeCompare(kb);
+      return (a.created || 0) - (b.created || 0);
+    });
+    box.innerHTML = sorted.length ? sorted.map(r =>
+      '<div class="km-task-item' + (r.id === KM._editTaskId ? ' km-task-editing' : '') + '">' +
+        '<span class="km-rem-time">' + esc(r.due || '09:00') + '</span>' +
+        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        (r.due ? '<span class="km-task-due">до ' + esc(r.due) + '</span>' : '') +
+        (r.repeat ? '<span class="km-task-rep">ежедневно</span>' : '') +
+        '<span class="km-rem-who">' + esc(targetsShort(r.kmIds)) + '</span>' +
+        '<button class="km-icon" data-edittask="' + esc(r.id) + '" title="Изменить">✏️</button>' +
+        '<button class="km-del" data-deltask="' + esc(r.id) + '">✕</button>' +
+      '</div>').join('') : '<div class="km-muted">Нет назначенных задач</div>';
+  }
+  function renderAdminRemList() {
+    const box = el('kmRemAdminList');
+    if (!box) return;
+    const rems = Array.isArray(KM.reminders) ? KM.reminders : [];
+    box.innerHTML = rems.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r =>
+      '<div class="km-rem-item">' +
+        '<span class="km-rem-time">' + esc(r.time) + '</span>' +
+        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
+        '<span class="km-rem-repeat">' + (r.repeat ? '↻ каждый день' : 'разово') + '</span>' +
+        '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
+        '<button class="km-icon" data-editrem="' + esc(r.id) + '" title="Изменить">✏️</button>' +
+        '<button class="km-del" data-delrem="' + esc(r.id) + '">✕</button>' +
+      '</div>').join('') || '<div class="km-muted">Нет напоминаний</div>';
+  }
+
   async function kmRenderAdmin() {
     const conn = el('kmConn');
     if (!conn) return;
@@ -6377,7 +6475,9 @@ newText.focus();
       const rf = (g.files || {})[REM_FILE];
       rems = (rf && rf.content) ? (JSON.parse(rf.content) || []) : [];
       if (!Array.isArray(rems)) rems = [];
-      tks = await tasksGet(); if (!Array.isArray(tks)) tks = [];
+      const tf = (g.files || {})[TASK_FILE];
+      if (tf && tf.content) { try { tks = JSON.parse(tf.content); } catch (e) { tks = []; } }
+      if (!Array.isArray(tks)) tks = [];
     } catch (e) { conn.textContent = '⚠ ' + e.message; return; }
     KM.adminRows = rows || [];
     KM.reminders = rems;
@@ -6390,32 +6490,8 @@ newText.focus();
       if (et) { applyTargets('kmTaskTargets', et.kmIds); updateMsLabel('kmTaskTargets'); }
     }
 
-    const tksSorted = tks.slice().sort((a, b) => {
-      const ka = a.due ? (String(a.due)) : '09:00';
-      const kb = b.due ? (String(b.due)) : '09:00';
-      if (ka !== kb) return ka.localeCompare(kb);
-      return (a.created || 0) - (b.created || 0);
-    });
-    el('kmTaskAdminList').innerHTML = tksSorted.length ? tksSorted.map(r =>
-      '<div class="km-task-item' + (r.id === KM._editTaskId ? ' km-task-editing' : '') + '">' +
-        '<span class="km-rem-time">' + esc(r.due || '09:00') + '</span>' +
-        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
-        (r.due ? '<span class="km-task-due">до ' + esc(r.due) + '</span>' : '') +
-        (r.repeat ? '<span class="km-task-rep">ежедневно</span>' : '') +
-        '<span class="km-rem-who">' + esc(targetsShort(r.kmIds)) + '</span>' +
-        '<button class="km-icon" data-edittask="' + esc(r.id) + '" title="Изменить">✏️</button>' +
-        '<button class="km-del" data-deltask="' + esc(r.id) + '">✕</button>' +
-      '</div>').join('') : '<div class="km-muted">Нет назначенных задач</div>';
-
-    el('kmRemAdminList').innerHTML = rems.slice().sort((a, b) => String(a.time).localeCompare(String(b.time))).map(r =>
-      '<div class="km-rem-item">' +
-        '<span class="km-rem-time">' + esc(r.time) + '</span>' +
-        '<span class="km-rem-text">' + esc(r.text) + '</span>' +
-        '<span class="km-rem-repeat">' + (r.repeat ? '↻ каждый день' : 'разово') + '</span>' +
-        '<span class="km-rem-who">' + esc(targetNames(r.kmIds)) + '</span>' +
-        '<button class="km-icon" data-editrem="' + esc(r.id) + '" title="Изменить">✏️</button>' +
-        '<button class="km-del" data-delrem="' + esc(r.id) + '">✕</button>' +
-      '</div>').join('') || '<div class="km-muted">Нет напоминаний</div>';
+    renderAdminTaskList();
+    renderAdminRemList();
 
     const now = Date.now();
     el('kmAdminList').innerHTML = KM.adminRows.map(r => {
