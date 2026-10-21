@@ -1215,7 +1215,7 @@
 
   /* --- Адаптив: ничего не выходит за экран --- */
   @media (max-width: 640px) {
-    body { padding: 14px; padding-bottom: 92px; }
+    body { padding: 14px; padding-bottom: 92px; background-attachment: scroll; }
     .container { padding-top: 58px; }
     .header h1 { font-size: 18px; }
     .hbtn-lbl { display: none; }
@@ -1228,6 +1228,33 @@
     .timer-display { font-size: 28px; }
     .row { flex-direction: column; }
     .field-group { min-width: 0; }
+
+    /* iOS PWA: делаем каркас неподвижным, а прокрутку — внутренней.
+       Это единственный надёжный способ удержать шапку и меню на месте
+       в standalone-режиме iOS, где position:fixed при скролле «уезжает». */
+    html { height: 100%; overflow: hidden; }
+    body {
+      position: fixed; inset: 0; overflow: hidden;
+      padding: 0; background-attachment: scroll;
+    }
+    .container {
+      position: absolute; inset: 0; max-width: none; margin: 0;
+      padding: 14px; padding-top: 58px; padding-bottom: 96px;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
+    /* убираем backdrop-filter с fixed-элементов — на iOS он тоже мешает фиксации */
+    .header, .tabs, .km-topbar, .km-tabbar {
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+    .header { background: var(--surface); }
+    .tabs { background: var(--bg); }
+    .km-topbar { background: var(--surface); }
+    .km-tabbar { background: var(--surface); }
+
+    /* кабинет КМ уже со своим внутренним скроллом — оставляем как есть */
+    .km-root { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   }
 
   /* --- Уважение к настройкам анимации --- */
@@ -1744,7 +1771,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 52,
+    version: 53,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse, pulseFields
   };
