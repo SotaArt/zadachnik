@@ -911,11 +911,12 @@
   .km-view-sec b { color: var(--purple); }
   .km-view-call { font-size: 13px; padding: 3px 0; color: var(--tx-2); }
   .km-task-editing { background: var(--brand-soft); border-radius: 8px; padding-left: 8px; padding-right: 8px; }
-  .km-call-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--tx-3);
-    font-size: 13px; user-select: none; }
-  .km-call-check input { width: 18px; height: 18px; }
-  .km-call-check.on { color: var(--green); }
-  .km-call-check.off { color: var(--danger-soft); }
+  .km-call-mark-btn { display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; font-size: 19px; border-radius: 10px; cursor: pointer;
+    background: var(--bg-active); color: var(--tx-4); border: 2px solid var(--bd-1);
+    filter: grayscale(1); opacity: 0.7; transition: all .12s; }
+  .km-call-mark-btn.active { background: var(--ok-strong); color: #fff; border-color: var(--ok-strong);
+    filter: none; opacity: 1; }
   .km-call-item .cl-mark-end { min-width: 22px; text-align: center; margin-left: auto; font-size: 15px; }
   .km-dist-btn { background: var(--brand-soft); }
   .km-dist-btn:hover { background: var(--brand-soft-hover); }
@@ -1084,8 +1085,7 @@
   /* --- Панель админа/КМ кнопки --- */
   .km-dist-btn, .actions button.dist-btn { background: var(--accent-soft); color: var(--purple); }
   .km-dist-btn:hover, .actions button.dist-btn:hover { background: rgba(124,131,255,.24); }
-  .km-call-check.on { color: var(--green); }
-  .km-call-check.off { color: var(--red); }
+  .km-call-mark-btn.active { background: var(--ok-strong); }
   .km-call-item .cl-mark-end { color: var(--green); }
   .km-call-item .cl-dur { color: var(--green); }
 
@@ -1771,7 +1771,7 @@ function setStatus(kind, text) {
 }
 function buildExportData() {
   return {
-    version: 53,
+    version: 54,
     exported: new Date().toISOString(),
     tasks, workLog, employees, empWorkLog, empAbsences, sessions, dailyPulse, pulseFields
   };
@@ -6273,6 +6273,13 @@ newText.focus();
     try { return JSON.parse(localStorage.getItem(KM_SESSION_KEY) || 'null'); } catch (e) { return null; }
   }
   function kmSessionClear() { try { localStorage.removeItem(KM_SESSION_KEY); } catch (e) {} }
+  function kmDocSaveLocal() {
+    if (!KM.kmId || !KM.doc) return;
+    try { localStorage.setItem('tasker_km_doc_' + KM.kmId, JSON.stringify(KM.doc)); } catch (e) {}
+  }
+  function kmDocLoadLocal(kmId) {
+    try { return JSON.parse(localStorage.getItem('tasker_km_doc_' + kmId) || 'null'); } catch (e) { return null; }
+  }
   function cfgReady() { return !!(KM.cfg.token && KM.cfg.gistId); }
 
   function parseHash() {
@@ -6462,6 +6469,20 @@ newText.focus();
       timer: d.timer || null, lastSeen: d.lastSeen || Date.now(), day: d.day || today()
     };
   }
+  // Если локально был активный таймер/звонок, а в облаке он ещё не успел
+  // сохраниться (сон телефона/обрыв сети) — восстанавливаем локальную версию.
+  function kmMergeLocalDoc(kmId, doc) {
+    const local = kmDocLoadLocal(kmId);
+    if (!local) return doc;
+    const localRunning = !!(local.timer && local.timer.running);
+    const docRunning = !!(doc.timer && doc.timer.running);
+    if (localRunning && !docRunning) {
+      doc.timer = local.timer;
+      if (local.call && !doc.call) doc.call = local.call;
+      if (Array.isArray(local.calls) && local.calls.length > (doc.calls || []).length) doc.calls = local.calls;
+    }
+    return doc;
+  }
   function todayMs() {
     const base = today();
     return KM.doc.entries.filter(x => x.date === base).reduce((s, x) => s + Math.max(0, x.endTs - x.startTs), 0);
@@ -6579,7 +6600,7 @@ newText.focus();
       KM.pin = rec.pin || pin;
       KM.pinHash = rec.pinHash || h;
       KM.status = rec.status || 'work';
-      KM.doc = normDoc(rec.doc);
+      KM.doc = kmMergeLocalDoc(kmId, normDoc(rec.doc));
       KM.doc.day = today();
       kmSessionSave();
       requestNotifPermission();
@@ -6600,7 +6621,7 @@ newText.focus();
       KM.pin = rec.pin || '';
       KM.pinHash = rec.pinHash || null;
       KM.status = rec.status || 'work';
-      KM.doc = normDoc(rec.doc);
+      KM.doc = kmMergeLocalDoc(kmId, normDoc(rec.doc));
       KM.doc.day = today();
       KM.roster = await rosterList().catch(() => []);
       requestNotifPermission();
@@ -6650,7 +6671,7 @@ newText.focus();
           '<div class="km-call-live">' +
             '<span class="km-muted" id="kmCallNum">— нет звонка —</span>' +
             '<span class="km-call-timer" id="kmCallTimer"></span>' +
-            '<label class="km-call-check" id="kmCallCheckLbl"><input type="checkbox" id="kmCallCheck"> дозвон ✅</label>' +
+            '<button class="km-call-mark-btn" id="kmCallMark" title="Дозвон (есть диалог). Если не нажать — звонок зафиксируется как отказ">✅</button>' +
             '<button class="km-btn" id="kmCallStartBtn">▶ Набор</button>' +
             '<button class="km-btn km-danger" id="kmCallStopBtn" style="display:none">⏹ Отбой</button>' +
             '<input id="kmCallNote" class="km-input" placeholder="Комментарий: перезвон, договорённость…">' +
@@ -6711,7 +6732,7 @@ newText.focus();
     el('kmTopic').addEventListener('input', updateStartState);
     el('kmCallStartBtn').onclick = kmCallStart;
     el('kmCallStopBtn').onclick = kmCallStop;
-    el('kmCallCheck').addEventListener('change', kmSetCallMark);
+    el('kmCallMark').onclick = kmToggleCallMark;
     el('kmCallNote').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); kmCallStop(); } });
     el('kmChkAdd').onclick = addChecklist;
     el('kmChkText').addEventListener('keydown', e => { if (e.key === 'Enter') addChecklist(); });
@@ -6850,21 +6871,20 @@ newText.focus();
     const num = el('kmCallNum'), timer = el('kmCallTimer');
     const startB = el('kmCallStartBtn'), stopB = el('kmCallStopBtn');
     const note = el('kmCallNote'), hint = el('kmCallHint');
-    const chk = el('kmCallCheck'), chkLbl = el('kmCallCheckLbl');
+    const markB = el('kmCallMark');
     if (num) num.textContent = call ? ('Звонок #' + (calls.length + 1)) : '— нет звонка —';
     if (timer) timer.textContent = call ? fmtClock(Math.max(0, Date.now() - call.startTs)) : '';
     if (startB) { startB.style.display = call ? 'none' : 'inline-block'; startB.disabled = !running; }
     if (stopB) stopB.style.display = call ? 'inline-block' : 'none';
     if (note) note.disabled = !call;
-    const hasMark = call ? (call.mark !== null && call.mark !== undefined) : true;
-    if (chk) { chk.checked = call ? (call.mark !== 'fail') : true; chk.disabled = !call; }
-    if (chkLbl) {
-      chkLbl.classList.toggle('on', !!call && hasMark);
-      chkLbl.classList.toggle('off', !!call && !hasMark);
-      chkLbl.style.display = call ? '' : 'none';
+    // Галочка ✅ — это чекбокс (как в версии для меня): по умолчанию не выбрана,
+    // жмём при дозвоне. Если не нажата — звонок фиксируется как отказ.
+    if (markB) {
+      markB.style.display = call ? '' : 'none';
+      markB.classList.toggle('active', !!call && call.mark === 'ok');
     }
     if (hint) hint.textContent = running
-      ? 'Набор → если ответили, оставьте «дозвон ✅»; при «Отбое» статус зафиксируется.'
+      ? 'Набор → если ответили, нажмите ✅; затем «Отбой». Без ✅ звонок = отказ.'
       : 'Сначала нажмите «▶ Старт задачи» — звонки доступны во время задачи.';
     const list = el('kmCallList');
     if (list) {
@@ -6880,18 +6900,18 @@ newText.focus();
     if (sum) sum.textContent = calls.length ? '— ' + calls.length : '';
   }
 
-  function kmSetCallMark() {
-    const chk = el('kmCallCheck');
+  function kmToggleCallMark() {
     if (!KM.doc.call) return;
-    KM.doc.call.mark = (chk && chk.checked) ? 'ok' : 'fail';
+    KM.doc.call.mark = (KM.doc.call.mark === 'ok') ? null : 'ok';
     renderCalls();
     kmPushSoon();
   }
 
   function kmCallStart() {
     if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running || KM.doc.call) return;
-    KM.doc.call = { startTs: Date.now(), mark: 'ok' };
+    KM.doc.call = { startTs: Date.now(), mark: null };
     logEvent('call_start', KM.doc.timer.topic || '');
+    kmDocSaveLocal();
     renderCalls();
     kmPushSoon();
   }
@@ -6899,8 +6919,7 @@ newText.focus();
   function kmCallStop() {
     if (!KM.doc || !KM.doc.call) return;
     const c = KM.doc.call;
-    const chk = el('kmCallCheck');
-    c.mark = (chk && chk.checked) ? 'ok' : 'fail';
+    c.mark = (c.mark === 'ok') ? 'ok' : 'fail';
     const endTs = Date.now();
     const noteEl = el('kmCallNote');
     const note = noteEl ? noteEl.value.trim() : '';
@@ -6912,6 +6931,7 @@ newText.focus();
     KM._callMark = null;
     if (noteEl) noteEl.value = '';
     logEvent('call_stop', (c.mark === 'ok' ? '✅ дозвон' : '❌ не дозвонился') + (note ? ' · ' + note : ''));
+    kmDocSaveLocal();
     renderCalls();
     kmPushSoon();
   }
@@ -7082,6 +7102,7 @@ newText.focus();
     KM.doc.timer = { running: true, startTs: Date.now(), topic: topic };
     KM.lastActivity = Date.now();
     logEvent('start', topic);
+    kmDocSaveLocal();
     if (kmTimerId) clearInterval(kmTimerId);
     kmTimerId = setInterval(kmTick, 1000);
     kmTick();
@@ -7145,23 +7166,15 @@ newText.focus();
   ['pointerdown', 'keydown', 'mousemove', 'touchstart', 'scroll'].forEach(ev =>
     window.addEventListener(ev, markActivity, { passive: true }));
 
-  function onVisibility() {
-    if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
-    if (document.visibilityState === 'hidden') kmStopTimer('bg');
-  }
-  document.addEventListener('visibilitychange', onVisibility);
-
+  // Таймер НЕ останавливается при сворачивании/засыпании устройства —
+  // звонки идут со стационарного телефона, мобильный может спать.
   function kmStartHeartbeat() {
     kmStopHeartbeat();
     KM.hbId = setInterval(kmHeartbeat, HEARTBEAT_MS);
-    KM.idleId = setInterval(() => {
-      if (!KM.doc || !KM.doc.timer || !KM.doc.timer.running) return;
-      if (Date.now() - KM.lastActivity > IDLE_MS) kmStopTimer('idle');
-    }, 30000);
+    // idle-остановка отключена: таймер продолжает идти при бездействии экрана
     if (!KM.pagehideBound) {
       KM.pagehideBound = true;
       window.addEventListener('pagehide', () => {
-        if (KM.doc && KM.doc.timer && KM.doc.timer.running) kmStopTimer('offline');
         kmPushNow();
       });
     }
@@ -7197,8 +7210,9 @@ newText.focus();
   async function kmPushNow() {
     if (!KM.kmId || !KM.doc) return;
     pushTimer = null;
+    KM.doc.lastSeen = Date.now();
+    kmDocSaveLocal();
     try {
-      KM.doc.lastSeen = Date.now();
       let rec = null;
       try { rec = await kmGet(KM.kmId); } catch (e) {}
       let at = null;
